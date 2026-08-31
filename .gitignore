@@ -1,0 +1,49 @@
+# Build outputs
+*.asi
+*.lib
+*.dll
+*.exe
+*.obj
+*.pdb
+*.idb
+*.ilk
+*.exp
+*.log
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.sdf
+*.opensdf
+ipch/
+*.VC.db
+*.VC.opendb
+
+# Build directories
+x64/
+Release/
+Debug/
+build/
+out/
+
+# MyJourney user data (not part of source)
+MyJourney/
+
+# User config files
+WriteYourJourney.ini
+
+# Backup files
+*.bk
+*.bak
+
+# Vulkan SDK generated
+*.cache
+
+# Temporary
+*.tmp
+
+# Media files (too large for GitHub)
+*.mp4
+*.avi
+*.mov
