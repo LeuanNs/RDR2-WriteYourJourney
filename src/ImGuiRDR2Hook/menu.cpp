@@ -136,6 +136,9 @@ namespace
 	std::atomic<int> s_chapter{ 1 };
 	int s_lastChapterSeen = 1;
 
+	std::atomic<int> s_playerHonor{ 0 };
+	std::atomic<bool> s_isJohn{ false };
+
 	std::atomic<bool>  s_escDown{ false };     // ESC mantenido (leido por el script)
 	std::atomic<float> s_escProgress{ 0.f };   // Progreso 0..1 del mantener-ESC
 
@@ -2039,6 +2042,16 @@ void CImGuiMenu::SetWorldHour(int hour)
 void CImGuiMenu::SetChapter(int chapter)
 {
 	s_chapter.store(std::max(1, chapter));
+}
+
+void CImGuiMenu::SetPlayerHonor(int honor)
+{
+	s_playerHonor.store(honor);
+}
+
+void CImGuiMenu::SetIsJohn(bool isJohn)
+{
+	s_isJohn.store(isJohn);
 }
 
 void CImGuiMenu::SetJournalTitle(const std::string& title)
