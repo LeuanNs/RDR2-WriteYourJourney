@@ -18,6 +18,7 @@ struct BookConfig
 	bool allowsOpenRandomPage = true;
 	bool hasIndex = true;
 	bool autoOrderPages = true;
+	bool isOwned = false;
 };
 
 struct BookChapter
@@ -55,4 +56,7 @@ namespace CustomBooks
 	void HandleInput();
 
 	const std::vector<std::string>& GetAvailableBooks();
+
+	void SetBookOwned(const std::string& internalName, bool owned);
+	bool IsBookOwned(const std::string& internalName);
 }
