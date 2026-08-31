@@ -16,6 +16,7 @@
 #include "script.h"
 #include "keyboard.h"
 #include "menu.h"
+#include "custombooks.h"
 #include "config.h"
 #include "Hook/Manager.h"
 
@@ -411,7 +412,7 @@ void main()
 		}
 		else
 		{
-			// Bucle constante de bloqueo mientras el diario esta en uso
+			// Bucle constante de bloqueo mientras el diario o satchel esta en uso
 			if (CImGuiMenu::IsAppreciatingView())
 			{
 				AppreciateViewControlsThisFrame();
@@ -432,6 +433,8 @@ void main()
 			if (!GameHasFocus())
 			{
 				ForceCloseJournal();
+				CustomBooks::CloseInventory();
+				CustomBooks::CloseBook();
 				WAIT(0);
 				continue;
 			}
@@ -442,7 +445,7 @@ void main()
 			if (s_active) // El SOS pudo haber cerrado ya la sesion
 			{
 				if (PLAYER::IS_PLAYER_DEAD(PLAYER::PLAYER_ID()) ||
-				    !CImGuiMenu::GetIsOpen())
+				    (!CImGuiMenu::GetIsOpen() && !CustomBooks::IsInventoryOpen() && !CustomBooks::IsBookOpen()))
 				{
 					ForceCloseJournal();
 				}
@@ -456,6 +459,11 @@ void main()
 					// TODO #12: actualiza el capítulo actual para el directorio dinámico
 					// (usando una nativa de la campaña, si está disponible; por ahora fija en 1)
 					CImGuiMenu::SetChapter(1);
+
+					CImGuiMenu::SetPlayerHonor(PLAYER::_GET_HONOR());
+					const Hash playerModel = ENTITY::GET_ENTITY_MODEL(PLAYER::PLAYER_PED_ID());
+					const Hash johnHash = MISC::GET_HASH_KEY("player_three");
+					CImGuiMenu::SetIsJohn(playerModel == johnHash);
 
 					UpdateJournalTitle(); // TODO FASE7#1: red de seguridad si el modelo cambia a mitad de sesion
 				}

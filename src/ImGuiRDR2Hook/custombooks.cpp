@@ -13,6 +13,7 @@ namespace CustomBooks
 {
 	static std::vector<std::string> s_availableBooks;
 	static std::unordered_map<std::string, CustomBook> s_loadedBooks;
+	static std::unordered_map<std::string, bool> s_ownedBooks;
 	static bool s_inventoryOpen = false;
 	static bool s_bookOpen = false;
 	static std::string s_currentBook;
@@ -20,6 +21,7 @@ namespace CustomBooks
 	static int s_totalPages = 0;
 	static float s_bHoldTime = 0.f;
 	static bool s_bHeld = false;
+	static int s_selectedBookIdx = 0;
 
 	static fs::path GetBooksDir()
 	{
@@ -118,7 +120,11 @@ namespace CustomBooks
 		for (const auto& entry : fs::directory_iterator(booksDir))
 		{
 			if (entry.is_directory())
-				s_availableBooks.push_back(entry.path().filename().string());
+			{
+				std::string name = entry.path().filename().string();
+				s_availableBooks.push_back(name);
+				s_ownedBooks[name] = true;
+			}
 		}
 	}
 
@@ -143,6 +149,7 @@ namespace CustomBooks
 	void OpenInventory()
 	{
 		s_inventoryOpen = true;
+		s_selectedBookIdx = 0;
 	}
 
 	void CloseInventory()
@@ -235,6 +242,40 @@ namespace CustomBooks
 		return IM_COL32(30, 25, 20, 255);
 	}
 
+	static void DrawMiniBookCover(ImDrawList* dl, const CustomBook& book, float cx, float cy, float cw, float ch, ImFont* f)
+	{
+		float pad = 6.f;
+		float coverX = cx + pad;
+		float coverY = cy + pad;
+		float coverW = cw - pad * 2.f;
+		float coverH = ch - pad * 2.f - f->FontSize * 1.8f;
+
+		ImU32 coverCol = IM_COL32(book.config.coverColorRGB[0], book.config.coverColorRGB[1], book.config.coverColorRGB[2], 255);
+		dl->AddRectFilled({ coverX, coverY }, { coverX + coverW, coverY + coverH }, coverCol, 3.f);
+		dl->AddRect({ coverX, coverY }, { coverX + coverW, coverY + coverH }, IM_COL32(50, 40, 30, 200), 3.f, 0, 1.5f);
+
+		float spineW = 5.f;
+		dl->AddRectFilled({ coverX, coverY }, { coverX + spineW, coverY + coverH }, IM_COL32(
+			(int)(book.config.coverColorRGB[0] * 0.5f),
+			(int)(book.config.coverColorRGB[1] * 0.5f),
+			(int)(book.config.coverColorRGB[2] * 0.5f), 255));
+
+		float borderW = 8.f;
+		dl->AddRect({ coverX + borderW, coverY + borderW }, { coverX + coverW - borderW, coverY + coverH - borderW }, IM_COL32(180, 150, 100, 120), 2.f, 0, 1.f);
+
+		float ornamentY = coverY + coverH * 0.3f;
+		float ornamentW = coverW * 0.4f;
+		dl->AddLine({ coverX + coverW * 0.5f - ornamentW * 0.5f, ornamentY }, { coverX + coverW * 0.5f + ornamentW * 0.5f, ornamentY }, IM_COL32(200, 170, 120, 150), 1.f);
+		dl->AddLine({ coverX + coverW * 0.5f - ornamentW * 0.3f, ornamentY - 4.f }, { coverX + coverW * 0.5f + ornamentW * 0.3f, ornamentY - 4.f }, IM_COL32(200, 170, 120, 100), 1.f);
+		dl->AddLine({ coverX + coverW * 0.5f - ornamentW * 0.3f, ornamentY + 4.f }, { coverX + coverW * 0.5f + ornamentW * 0.3f, ornamentY + 4.f }, IM_COL32(200, 170, 120, 100), 1.f);
+
+		const char* btitle = book.config.displayTitle.c_str();
+		ImVec2 bts = f->CalcTextSizeA(f->FontSize * 0.85f, coverW - 20.f, 0.f, btitle);
+		float textX = coverX + coverW * 0.5f - bts.x * 0.5f;
+		float textY = coverY + coverH * 0.55f;
+		dl->AddText(f, f->FontSize * 0.85f, { textX, textY }, IM_COL32(234, 223, 197, 240), btitle, nullptr, coverW - 20.f);
+	}
+
 	void RenderInventory()
 	{
 		if (!s_inventoryOpen) return;
@@ -243,117 +284,103 @@ namespace CustomBooks
 		ImVec2 ds = io.DisplaySize;
 		ImFont* f = io.Fonts->Fonts[1] ? io.Fonts->Fonts[1] : io.Fonts->Fonts[0];
 
-		dl->AddRectFilled({ 0, 0 }, ds, IM_COL32(15, 12, 8, 220));
+		dl->AddRectFilled({ 0, 0 }, ds, IM_COL32(10, 8, 5, 230));
 
-		float panelW = ds.x * 0.7f;
-		float panelH = ds.y * 0.8f;
+		float panelW = ds.x * 0.75f;
+		float panelH = ds.y * 0.85f;
 		float px = ds.x * 0.5f - panelW * 0.5f;
 		float py = ds.y * 0.5f - panelH * 0.5f;
 
-		dl->AddRectFilled({ px, py }, { px + panelW, py + panelH }, IM_COL32(35, 28, 20, 240), 8.f);
-		dl->AddRect({ px, py }, { px + panelW, py + panelH }, IM_COL32(120, 90, 50, 200), 8.f, 0, 2.5f);
-
-		float innerPad = 15.f;
-		dl->AddRectFilled({ px + innerPad, py + innerPad }, { px + panelW - innerPad, py + panelH - innerPad }, IM_COL32(25, 20, 15, 200), 4.f);
+		dl->AddRectFilled({ px, py }, { px + panelW, py + panelH }, IM_COL32(30, 24, 16, 240), 6.f);
+		dl->AddRect({ px, py }, { px + panelW, py + panelH }, IM_COL32(140, 110, 60, 220), 6.f, 0, 2.f);
 
 		const char* title = "Satchel";
-		ImVec2 ts = f->CalcTextSizeA(f->FontSize * 1.6f, FLT_MAX, 0.f, title);
-		dl->AddText(f, f->FontSize * 1.6f, { ds.x * 0.5f - ts.x * 0.5f, py + 25.f }, IM_COL32(210, 185, 140, 255), title);
+		ImVec2 ts = f->CalcTextSizeA(f->FontSize * 1.8f, FLT_MAX, 0.f, title);
+		dl->AddText(f, f->FontSize * 1.8f, { ds.x * 0.5f - ts.x * 0.5f, py + 30.f }, IM_COL32(220, 195, 150, 255), title);
 
-		float lineY = py + 25.f + f->FontSize * 2.2f;
-		dl->AddLine({ px + 40.f, lineY }, { px + panelW - 40.f, lineY }, IM_COL32(100, 80, 50, 150), 1.f);
+		float lineY = py + 30.f + f->FontSize * 2.5f;
+		dl->AddLine({ px + 50.f, lineY }, { px + panelW - 50.f, lineY }, IM_COL32(120, 95, 55, 180), 1.5f);
 
-		float gridTop = lineY + 20.f;
-		float gridBottom = py + panelH - 130.f;
-		float gridH = gridBottom - gridTop;
-
-		int cols = 4;
-		int rows = 4;
-		float cellW = 110.f;
-		float cellH = 150.f;
-		float gapX = (panelW - 80.f - cols * cellW) / (cols - 1);
-		float gapY = (gridH - rows * cellH) / (rows > 1 ? rows - 1 : 1);
-		if (gapX < 10.f) gapX = 10.f;
-		if (gapY < 10.f) gapY = 10.f;
-
-		int hoveredIdx = -1;
-
-		for (size_t i = 0; i < s_availableBooks.size() && i < (size_t)(cols * rows); ++i)
+		if (s_availableBooks.empty())
 		{
-			int col = i % cols;
-			int row = i / cols;
-			float cx = px + 40.f + col * (cellW + gapX);
-			float cy = gridTop + row * (cellH + gapY);
-
-			LoadBook(s_availableBooks[i]);
-			auto& book = s_loadedBooks[s_availableBooks[i]];
-
-			bool hovered = io.MousePos.x >= cx && io.MousePos.x <= cx + cellW &&
-			               io.MousePos.y >= cy && io.MousePos.y <= cy + cellH;
-
-			ImU32 slotBg = hovered ? IM_COL32(55, 45, 30, 220) : IM_COL32(40, 32, 22, 200);
-			dl->AddRectFilled({ cx, cy }, { cx + cellW, cy + cellH }, slotBg, 4.f);
-			dl->AddRect({ cx, cy }, { cx + cellW, cy + cellH }, hovered ? IM_COL32(200, 170, 100, 220) : IM_COL32(80, 65, 40, 150), 4.f, 0, 1.5f);
-
-			float bookPadX = 12.f, bookPadY = 10.f;
-			float bkX = cx + bookPadX, bkY = cy + bookPadY;
-			float bkW = cellW - bookPadX * 2.f, bkH = cellH - bookPadY * 2.f - f->FontSize * 1.5f;
-
-			ImU32 coverCol = IM_COL32(book.config.coverColorRGB[0], book.config.coverColorRGB[1], book.config.coverColorRGB[2], 255);
-			dl->AddRectFilled({ bkX, bkY }, { bkX + bkW, bkY + bkH }, coverCol, 3.f);
-			dl->AddRect({ bkX, bkY }, { bkX + bkW, bkY + bkH }, IM_COL32(50, 40, 30, 200), 3.f, 0, 1.f);
-
-			float spineW = 6.f;
-			dl->AddRectFilled({ bkX, bkY }, { bkX + spineW, bkY + bkH }, IM_COL32(
-				(int)(book.config.coverColorRGB[0] * 0.6f),
-				(int)(book.config.coverColorRGB[1] * 0.6f),
-				(int)(book.config.coverColorRGB[2] * 0.6f), 255));
-
-			const char* btitle = book.config.displayTitle.c_str();
-			ImVec2 bts = f->CalcTextSizeA(f->FontSize * 0.9f, bkW - 10.f, 0.f, btitle);
-			float textX = bkX + bkW * 0.5f - bts.x * 0.5f;
-			float textY = bkY + bkH * 0.35f;
-			dl->AddText(f, f->FontSize * 0.9f, { textX, textY }, IM_COL32(234, 223, 197, 240), btitle, nullptr, bkW - 10.f);
-
-			if (hovered)
-			{
-				hoveredIdx = (int)i;
-				if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-				{
-					OpenBook(s_availableBooks[i]);
-				}
-			}
+			const char* empty = "No books found in MyJourney/Books/";
+			ImVec2 es = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, empty);
+			dl->AddText(f, f->FontSize, { ds.x * 0.5f - es.x * 0.5f, py + panelH * 0.5f }, IM_COL32(160, 140, 100, 200), empty);
 		}
-
-		float descY = gridBottom + 15.f;
-		dl->AddLine({ px + 40.f, descY }, { px + panelW - 40.f, descY }, IM_COL32(100, 80, 50, 150), 1.f);
-
-		float descTextY = descY + 15.f;
-		if (hoveredIdx >= 0 && hoveredIdx < (int)s_availableBooks.size())
+		else
 		{
-			auto& book = s_loadedBooks[s_availableBooks[hoveredIdx]];
+			if (s_selectedBookIdx >= (int)s_availableBooks.size())
+				s_selectedBookIdx = 0;
+			if (s_selectedBookIdx < 0)
+				s_selectedBookIdx = 0;
+
+			LoadBook(s_availableBooks[s_selectedBookIdx]);
+			auto& book = s_loadedBooks[s_availableBooks[s_selectedBookIdx]];
+
+			float coverAreaY = lineY + 30.f;
+			float coverAreaH = panelH * 0.55f;
+			float coverW = 180.f;
+			float coverH = coverAreaH - 20.f;
+			float coverX = ds.x * 0.5f - coverW * 0.5f;
+			float coverY = coverAreaY;
+
+			DrawMiniBookCover(dl, book, coverX, coverY, coverW, coverH, f);
+
+			float metaY = coverY + coverH + 25.f;
 			const char* dtitle = book.config.displayTitle.c_str();
-			dl->AddText(f, f->FontSize * 1.3f, { px + 50.f, descTextY }, IM_COL32(220, 195, 150, 255), dtitle);
+			ImVec2 dts = f->CalcTextSizeA(f->FontSize * 1.4f, FLT_MAX, 0.f, dtitle);
+			dl->AddText(f, f->FontSize * 1.4f, { ds.x * 0.5f - dts.x * 0.5f, metaY }, IM_COL32(230, 205, 160, 255), dtitle);
 
 			char meta[256];
 			snprintf(meta, sizeof(meta), "by %s  |  %s  |  %s",
 				book.config.author.c_str(),
 				book.config.category.c_str(),
 				book.config.year.c_str());
-			dl->AddText(f, f->FontSize, { px + 50.f, descTextY + f->FontSize * 1.8f }, IM_COL32(180, 160, 120, 200), meta);
-		}
-		else
-		{
-			const char* hint = "Hover over a book to see details";
-			dl->AddText(f, f->FontSize, { px + 50.f, descTextY }, IM_COL32(140, 120, 90, 180), hint);
-		}
+			ImVec2 ms = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, meta);
+			dl->AddText(f, f->FontSize, { ds.x * 0.5f - ms.x * 0.5f, metaY + f->FontSize * 2.f }, IM_COL32(180, 160, 120, 220), meta);
 
-		const char* escHint = "ESC: Close";
-		ImVec2 hs = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, escHint);
-		dl->AddText(f, f->FontSize, { px + panelW - 50.f - hs.x, descTextY + f->FontSize * 1.8f }, IM_COL32(160, 140, 100, 180), escHint);
+			if (s_availableBooks.size() > 1)
+			{
+				const char* navHint = "<- -> : Browse   |   ENTER : Open   |   ESC : Close";
+				ImVec2 ns = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, navHint);
+				dl->AddText(f, f->FontSize, { ds.x * 0.5f - ns.x * 0.5f, py + panelH - 50.f }, IM_COL32(160, 140, 100, 200), navHint);
+			}
+			else
+			{
+				const char* navHint = "ENTER : Open   |   ESC : Close";
+				ImVec2 ns = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, navHint);
+				dl->AddText(f, f->FontSize, { ds.x * 0.5f - ns.x * 0.5f, py + panelH - 50.f }, IM_COL32(160, 140, 100, 200), navHint);
+			}
+		}
 
 		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+		{
 			CloseInventory();
+		}
+
+		if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false))
+		{
+			if (s_selectedBookIdx > 0)
+				s_selectedBookIdx--;
+			else if (!s_availableBooks.empty())
+				s_selectedBookIdx = (int)s_availableBooks.size() - 1;
+		}
+
+		if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, false))
+		{
+			if (s_selectedBookIdx < (int)s_availableBooks.size() - 1)
+				s_selectedBookIdx++;
+			else if (!s_availableBooks.empty())
+				s_selectedBookIdx = 0;
+		}
+
+		if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false))
+		{
+			if (!s_availableBooks.empty() && s_selectedBookIdx >= 0 && s_selectedBookIdx < (int)s_availableBooks.size())
+			{
+				OpenBook(s_availableBooks[s_selectedBookIdx]);
+			}
+		}
 	}
 
 	void RenderBook()

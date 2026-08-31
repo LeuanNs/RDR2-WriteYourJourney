@@ -1,15 +1,12 @@
 #include "Manager.h"
+#include "../custombooks.h"
 
 IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 static WNDPROC s_WndProc;
 
 static LRESULT WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	// Mientras el diario esta abierto, ImGui procesa el teclado/raton
-	// (InputTextMultiline necesita los mensajes de teclas). Si ImGui
-	// consume el mensaje, no se reenvia al juego; el resto se reenvia,
-	// aunque el script ya bloquea los controles con natives.
-	if (CImGuiMenu::GetIsOpen())
+	if (CImGuiMenu::GetIsOpen() || CustomBooks::IsInventoryOpen() || CustomBooks::IsBookOpen())
 	{
 		if (ImGui_ImplWin32_WndProcHandler(hwnd, uMsg, wParam, lParam))
 			return true;
