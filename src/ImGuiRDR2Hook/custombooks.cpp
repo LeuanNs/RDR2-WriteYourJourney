@@ -68,6 +68,7 @@ namespace CustomBooks
 			else if (key == "AllowsOpenRandomPage") cfg.allowsOpenRandomPage = (val == "1");
 			else if (key == "HasIndex") cfg.hasIndex = (val == "1");
 			else if (key == "AutoOrderPages") cfg.autoOrderPages = (val == "1");
+			else if (key == "isOwned") cfg.isOwned = (val == "1");
 		}
 	}
 
@@ -122,8 +123,17 @@ namespace CustomBooks
 			if (entry.is_directory())
 			{
 				std::string name = entry.path().filename().string();
-				s_availableBooks.push_back(name);
-				s_ownedBooks[name] = true;
+				fs::path configPath = entry.path() / "config.ini";
+				if (fs::exists(configPath))
+				{
+					BookConfig tempCfg;
+					ParseConfig(configPath, tempCfg);
+					if (tempCfg.isOwned)
+					{
+						s_availableBooks.push_back(name);
+						s_ownedBooks[name] = true;
+					}
+				}
 			}
 		}
 	}
@@ -635,5 +645,64 @@ namespace CustomBooks
 			CloseBook();
 			OpenInventory();
 		}
+	}
+
+	void SetBookOwned(const std::string& internalName, bool owned)
+	{
+		fs::path configPath = GetBooksDir() / internalName / "config.ini";
+		if (!fs::exists(configPath)) return;
+
+		std::ifstream in(configPath);
+		if (!in) return;
+		std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+		in.close();
+
+		size_t pos = content.find("isOwned=");
+		if (pos != std::string::npos)
+		{
+			size_t endLine = content.find('\n', pos);
+			std::string newVal = owned ? "isOwned=1" : "isOwned=0";
+			if (endLine != std::string::npos)
+				content.replace(pos, endLine - pos, newVal);
+			else
+				content.replace(pos, content.size() - pos, newVal);
+
+			std::ofstream out(configPath, std::ios::trunc);
+			if (out) out << content;
+		}
+
+		if (owned)
+		{
+			if (std::find(s_availableBooks.begin(), s_availableBooks.end(), internalName) == s_availableBooks.end())
+			{
+				s_availableBooks.push_back(internalName);
+			}
+		}
+		else
+		{
+			auto it = std::find(s_availableBooks.begin(), s_availableBooks.end(), internalName);
+			if (it != s_availableBooks.end())
+			{
+				s_availableBooks.erase(it);
+				if (s_selectedBookIdx >= (int)s_availableBooks.size())
+					s_selectedBookIdx = std::max(0, (int)s_availableBooks.size() - 1);
+			}
+		}
+		s_ownedBooks[internalName] = owned;
+	}
+
+	bool IsBookOwned(const std::string& internalName)
+	{
+		auto it = s_ownedBooks.find(internalName);
+		if (it != s_ownedBooks.end())
+			return it->second;
+
+		fs::path configPath = GetBooksDir() / internalName / "config.ini";
+		if (!fs::exists(configPath)) return false;
+
+		BookConfig cfg;
+		ParseConfig(configPath, cfg);
+		s_ownedBooks[internalName] = cfg.isOwned;
+		return cfg.isOwned;
 	}
 }
