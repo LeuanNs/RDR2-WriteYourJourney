@@ -1,0 +1,1 @@
+& "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" "src\ImGuiRDR2Hook.sln" /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 "/p:OutDir=C:\Users\evanm\Desktop\ImGuiRDR2Hook-master\build" /v:m /nologo 2>&1 | Select-Object -Last 15
