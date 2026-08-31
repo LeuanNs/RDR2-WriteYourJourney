@@ -250,38 +250,127 @@ namespace CustomBooks
 		return IM_COL32(30, 25, 20, 255);
 	}
 
-	static void DrawMiniBookCover(ImDrawList* dl, const CustomBook& book, float cx, float cy, float cw, float ch, ImFont* f)
+	static void DrawFlourish(ImDrawList* dl, ImVec2 center, float width, ImU32 col)
 	{
-		float pad = 6.f;
-		float coverX = cx + pad;
-		float coverY = cy + pad;
-		float coverW = cw - pad * 2.f;
-		float coverH = ch - pad * 2.f - f->FontSize * 1.8f;
+		const float h = width * 0.15f;
+		dl->AddBezierQuadratic({ center.x - width * 0.5f, center.y },
+		                       { center.x - width * 0.25f, center.y - h },
+		                       { center.x, center.y }, col, 1.5f);
+		dl->AddBezierQuadratic({ center.x, center.y },
+		                       { center.x + width * 0.25f, center.y - h },
+		                       { center.x + width * 0.5f, center.y }, col, 1.5f);
+	}
 
+	static void DrawDiamond(ImDrawList* dl, ImVec2 pos, float size, ImU32 col)
+	{
+		const float s = size * 0.5f;
+		ImVec2 pts[4] = {
+			{ pos.x, pos.y - s },
+			{ pos.x + s, pos.y },
+			{ pos.x, pos.y + s },
+			{ pos.x - s, pos.y }
+		};
+		dl->AddConvexPolyFilled(pts, 4, col);
+	}
+
+	static void DrawBookCover(ImDrawList* dl, const CustomBook& book, float bx, float by, float bookW, float bookH, float A)
+	{
 		ImU32 coverCol = IM_COL32(book.config.coverColorRGB[0], book.config.coverColorRGB[1], book.config.coverColorRGB[2], 255);
-		dl->AddRectFilled({ coverX, coverY }, { coverX + coverW, coverY + coverH }, coverCol, 3.f);
-		dl->AddRect({ coverX, coverY }, { coverX + coverW, coverY + coverH }, IM_COL32(50, 40, 30, 200), 3.f, 0, 1.5f);
+		ImU32 darkCover = IM_COL32(
+			(int)(book.config.coverColorRGB[0] * 0.6f),
+			(int)(book.config.coverColorRGB[1] * 0.6f),
+			(int)(book.config.coverColorRGB[2] * 0.6f), 255);
 
-		float spineW = 5.f;
-		dl->AddRectFilled({ coverX, coverY }, { coverX + spineW, coverY + coverH }, IM_COL32(
-			(int)(book.config.coverColorRGB[0] * 0.5f),
-			(int)(book.config.coverColorRGB[1] * 0.5f),
-			(int)(book.config.coverColorRGB[2] * 0.5f), 255));
+		const float round = bookW * 0.04f;
+		dl->AddRectFilled({ bx, by }, { bx + bookW, by + bookH }, coverCol, round);
 
-		float borderW = 8.f;
-		dl->AddRect({ coverX + borderW, coverY + borderW }, { coverX + coverW - borderW, coverY + coverH - borderW }, IM_COL32(180, 150, 100, 120), 2.f, 0, 1.f);
+		const float f = bookW * 0.025f;
+		const ImVec2 bmin(bx + f, by + f);
+		const ImVec2 bmax(bx + bookW - f, by + bookH - f);
 
-		float ornamentY = coverY + coverH * 0.3f;
-		float ornamentW = coverW * 0.4f;
-		dl->AddLine({ coverX + coverW * 0.5f - ornamentW * 0.5f, ornamentY }, { coverX + coverW * 0.5f + ornamentW * 0.5f, ornamentY }, IM_COL32(200, 170, 120, 150), 1.f);
-		dl->AddLine({ coverX + coverW * 0.5f - ornamentW * 0.3f, ornamentY - 4.f }, { coverX + coverW * 0.5f + ornamentW * 0.3f, ornamentY - 4.f }, IM_COL32(200, 170, 120, 100), 1.f);
-		dl->AddLine({ coverX + coverW * 0.5f - ornamentW * 0.3f, ornamentY + 4.f }, { coverX + coverW * 0.5f + ornamentW * 0.3f, ornamentY + 4.f }, IM_COL32(200, 170, 120, 100), 1.f);
+		dl->AddRect({ bmin.x + 1.5f, bmin.y + 2.f }, { bmax.x + 1.5f, bmax.y + 2.f },
+		            IM_COL32(0, 0, 0, 70), round * 0.5f);
+		dl->AddRect(bmin, bmax, IM_COL32(0, 0, 0, 200), round * 0.5f, 0, 2.f);
 
-		const char* btitle = book.config.displayTitle.c_str();
-		ImVec2 bts = f->CalcTextSizeA(f->FontSize * 0.85f, coverW - 20.f, 0.f, btitle);
-		float textX = coverX + coverW * 0.5f - bts.x * 0.5f;
-		float textY = coverY + coverH * 0.55f;
-		dl->AddText(f, f->FontSize * 0.85f, { textX, textY }, IM_COL32(234, 223, 197, 240), btitle, nullptr, coverW - 20.f);
+		const float f2 = f + bookW * 0.018f;
+		dl->AddRect({ bmin.x + f2, bmin.y + f2 }, { bmax.x - f2, bmax.y - f2 },
+		            IM_COL32(0, 0, 0, 120), round * 0.4f, 0, 1.f);
+
+		const float dr = std::max(2.5f, bookW * 0.016f);
+		const ImU32 dc = IM_COL32(190, 150, 95, 150);
+		DrawDiamond(dl, bmin, dr, dc);
+		DrawDiamond(dl, { bmax.x, bmin.y }, dr, dc);
+		DrawDiamond(dl, { bmin.x, bmax.y }, dr, dc);
+		DrawDiamond(dl, bmax, dr, dc);
+
+		{
+			const float strapW = bookW * 0.115f;
+			const float strapX = bmax.x - bookW * 0.315f;
+
+			dl->AddRectFilled({ strapX - 5.f, bmin.y - 2.f },
+			                  { strapX + strapW - 5.f, bmax.y + 2.f },
+			                  IM_COL32(0, 0, 0, 70));
+
+			const int steps = 16;
+			for (int i = 0; i < steps; ++i)
+			{
+				float t0 = (float)i / steps;
+				float t1 = (float)(i + 1) / steps;
+				ImU32 c0 = IM_COL32(
+					(int)(46 * (1.f - t0) + 29 * t0),
+					(int)(28 * (1.f - t0) + 17 * t0),
+					(int)(16 * (1.f - t0) + 9 * t0), 255);
+				ImU32 c1 = IM_COL32(
+					(int)(46 * (1.f - t1) + 29 * t1),
+					(int)(28 * (1.f - t1) + 17 * t1),
+					(int)(16 * (1.f - t1) + 9 * t1), 255);
+				float y0 = bmin.y - 3.f + (bmax.y - bmin.y + 6.f) * t0;
+				float y1 = bmin.y - 3.f + (bmax.y - bmin.y + 6.f) * t1;
+				dl->AddRectFilledMultiColor(
+					{ strapX, y0 }, { strapX + strapW, y1 },
+					c0, c1, c1, c0);
+			}
+
+			dl->AddLine({ strapX, bmin.y }, { strapX, bmax.y }, IM_COL32(12, 7, 3, 190), 2.f);
+			dl->AddLine({ strapX + strapW, bmin.y }, { strapX + strapW, bmax.y }, IM_COL32(12, 7, 3, 190), 2.f);
+
+			const float dashLen = bookW * 0.025f;
+			const float gapLen = bookW * 0.018f;
+			float y = bmin.y + 6.f;
+			while (y < bmax.y - 6.f)
+			{
+				dl->AddLine({ strapX + 4.f, y }, { strapX + 4.f, y + dashLen }, IM_COL32(200, 165, 120, 80), 1.f);
+				y += dashLen + gapLen;
+			}
+			y = bmin.y + 6.f;
+			while (y < bmax.y - 6.f)
+			{
+				dl->AddLine({ strapX + strapW - 4.f, y }, { strapX + strapW - 4.f, y + dashLen }, IM_COL32(200, 165, 120, 80), 1.f);
+				y += dashLen + gapLen;
+			}
+		}
+
+		ImFont* font = ImGui::GetIO().Fonts->Fonts[1] ? ImGui::GetIO().Fonts->Fonts[1] : ImGui::GetIO().Fonts->Fonts[0];
+		const char* title = book.config.displayTitle.c_str();
+		const float titleSize = bookH * 0.085f;
+		const ImVec2 tc(bx + bookW * 0.5f, by + bookH * 0.40f);
+
+		ImVec2 ts = font->CalcTextSizeA(titleSize, FLT_MAX, 0.f, title);
+		ImVec2 tp = { tc.x - ts.x * 0.5f + 1.f, tc.y - ts.y * 0.5f + titleSize * 0.045f };
+		dl->AddText(font, titleSize, tp, IM_COL32(12, 6, 3, 175), title);
+		dl->AddText(font, titleSize, { tp.x - 1.f, tp.y - titleSize * 0.045f }, IM_COL32(210, 180, 120, 255), title);
+
+		const ImU32 flourish = IM_COL32(196, 162, 110, 175);
+		DrawFlourish(dl, { tc.x, tc.y - titleSize * 1.40f }, bookW * 0.27f, flourish);
+		DrawFlourish(dl, { tc.x, tc.y + titleSize * 1.40f }, bookW * 0.27f, flourish);
+
+		const char* year = book.config.year.c_str();
+		ImVec2 ys = font->CalcTextSizeA(bookH * 0.040f, FLT_MAX, 0.f, year);
+		dl->AddText(font, bookH * 0.040f, { tc.x - ys.x * 0.5f, tc.y + titleSize * 2.20f }, IM_COL32(206, 178, 136, 225), year);
+
+		const char* author = book.config.author.c_str();
+		ImVec2 as = font->CalcTextSizeA(bookH * 0.034f, FLT_MAX, 0.f, author);
+		dl->AddText(font, bookH * 0.034f, { tc.x - as.x * 0.5f, by + bookH * 0.905f }, IM_COL32(206, 178, 136, 220), author);
 	}
 
 	void RenderInventory()
@@ -294,26 +383,11 @@ namespace CustomBooks
 
 		dl->AddRectFilled({ 0, 0 }, ds, IM_COL32(10, 8, 5, 230));
 
-		float panelW = ds.x * 0.75f;
-		float panelH = ds.y * 0.85f;
-		float px = ds.x * 0.5f - panelW * 0.5f;
-		float py = ds.y * 0.5f - panelH * 0.5f;
-
-		dl->AddRectFilled({ px, py }, { px + panelW, py + panelH }, IM_COL32(30, 24, 16, 240), 6.f);
-		dl->AddRect({ px, py }, { px + panelW, py + panelH }, IM_COL32(140, 110, 60, 220), 6.f, 0, 2.f);
-
-		const char* title = "Satchel";
-		ImVec2 ts = f->CalcTextSizeA(f->FontSize * 1.8f, FLT_MAX, 0.f, title);
-		dl->AddText(f, f->FontSize * 1.8f, { ds.x * 0.5f - ts.x * 0.5f, py + 30.f }, IM_COL32(220, 195, 150, 255), title);
-
-		float lineY = py + 30.f + f->FontSize * 2.5f;
-		dl->AddLine({ px + 50.f, lineY }, { px + panelW - 50.f, lineY }, IM_COL32(120, 95, 55, 180), 1.5f);
-
 		if (s_availableBooks.empty())
 		{
 			const char* empty = "No books found in MyJourney/Books/";
 			ImVec2 es = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, empty);
-			dl->AddText(f, f->FontSize, { ds.x * 0.5f - es.x * 0.5f, py + panelH * 0.5f }, IM_COL32(160, 140, 100, 200), empty);
+			dl->AddText(f, f->FontSize, { ds.x * 0.5f - es.x * 0.5f, ds.y * 0.5f }, IM_COL32(160, 140, 100, 200), empty);
 		}
 		else
 		{
@@ -325,40 +399,69 @@ namespace CustomBooks
 			LoadBook(s_availableBooks[s_selectedBookIdx]);
 			auto& book = s_loadedBooks[s_availableBooks[s_selectedBookIdx]];
 
-			float coverAreaY = lineY + 30.f;
-			float coverAreaH = panelH * 0.55f;
-			float coverW = 180.f;
-			float coverH = coverAreaH - 20.f;
-			float coverX = ds.x * 0.5f - coverW * 0.5f;
-			float coverY = coverAreaY;
+			float bookW = ds.x * 0.35f;
+			float bookH = ds.y * 0.70f;
+			float bx = ds.x * 0.5f - bookW * 0.5f;
+			float by = ds.y * 0.5f - bookH * 0.5f;
 
-			DrawMiniBookCover(dl, book, coverX, coverY, coverW, coverH, f);
+			DrawBookCover(dl, book, bx, by, bookW, bookH, 1.0f);
 
-			float metaY = coverY + coverH + 25.f;
+			float arrowSize = 40.f;
+			float arrowX_left = bx - arrowSize - 20.f;
+			float arrowX_right = bx + bookW + 20.f;
+			float arrowY = ds.y * 0.5f;
+
+			bool hoverLeft = io.MousePos.x >= arrowX_left && io.MousePos.x <= arrowX_left + arrowSize &&
+			                 io.MousePos.y >= arrowY - arrowSize * 0.5f && io.MousePos.y <= arrowY + arrowSize * 0.5f;
+			bool hoverRight = io.MousePos.x >= arrowX_right && io.MousePos.x <= arrowX_right + arrowSize &&
+			                  io.MousePos.y >= arrowY - arrowSize * 0.5f && io.MousePos.y <= arrowY + arrowSize * 0.5f;
+
+			ImU32 arrowColLeft = hoverLeft ? IM_COL32(255, 215, 0, 200) : IM_COL32(200, 180, 140, 100);
+			ImU32 arrowColRight = hoverRight ? IM_COL32(255, 215, 0, 200) : IM_COL32(200, 180, 140, 100);
+
+			dl->AddTriangleFilled(
+				{ arrowX_left + arrowSize * 0.7f, arrowY - arrowSize * 0.4f },
+				{ arrowX_left + arrowSize * 0.7f, arrowY + arrowSize * 0.4f },
+				{ arrowX_left + arrowSize * 0.2f, arrowY },
+				arrowColLeft);
+
+			dl->AddTriangleFilled(
+				{ arrowX_right + arrowSize * 0.3f, arrowY - arrowSize * 0.4f },
+				{ arrowX_right + arrowSize * 0.3f, arrowY + arrowSize * 0.4f },
+				{ arrowX_right + arrowSize * 0.8f, arrowY },
+				arrowColRight);
+
+			if (hoverLeft && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+			{
+				if (s_selectedBookIdx > 0)
+					s_selectedBookIdx--;
+				else
+					s_selectedBookIdx = (int)s_availableBooks.size() - 1;
+			}
+
+			if (hoverRight && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+			{
+				if (s_selectedBookIdx < (int)s_availableBooks.size() - 1)
+					s_selectedBookIdx++;
+				else
+					s_selectedBookIdx = 0;
+			}
+
+			float metaY = by + bookH + 30.f;
 			const char* dtitle = book.config.displayTitle.c_str();
 			ImVec2 dts = f->CalcTextSizeA(f->FontSize * 1.4f, FLT_MAX, 0.f, dtitle);
 			dl->AddText(f, f->FontSize * 1.4f, { ds.x * 0.5f - dts.x * 0.5f, metaY }, IM_COL32(230, 205, 160, 255), dtitle);
 
 			char meta[256];
-			snprintf(meta, sizeof(meta), "by %s  |  %s  |  %s",
+			snprintf(meta, sizeof(meta), "by %s  |  %s",
 				book.config.author.c_str(),
-				book.config.category.c_str(),
-				book.config.year.c_str());
+				book.config.category.c_str());
 			ImVec2 ms = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, meta);
 			dl->AddText(f, f->FontSize, { ds.x * 0.5f - ms.x * 0.5f, metaY + f->FontSize * 2.f }, IM_COL32(180, 160, 120, 220), meta);
 
-			if (s_availableBooks.size() > 1)
-			{
-				const char* navHint = "<- -> : Browse   |   ENTER : Open   |   ESC : Close";
-				ImVec2 ns = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, navHint);
-				dl->AddText(f, f->FontSize, { ds.x * 0.5f - ns.x * 0.5f, py + panelH - 50.f }, IM_COL32(160, 140, 100, 200), navHint);
-			}
-			else
-			{
-				const char* navHint = "ENTER : Open   |   ESC : Close";
-				ImVec2 ns = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, navHint);
-				dl->AddText(f, f->FontSize, { ds.x * 0.5f - ns.x * 0.5f, py + panelH - 50.f }, IM_COL32(160, 140, 100, 200), navHint);
-			}
+			const char* navHint = "<- -> : Browse   |   ENTER : Open   |   ESC : Close";
+			ImVec2 ns = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, navHint);
+			dl->AddText(f, f->FontSize, { ds.x * 0.5f - ns.x * 0.5f, ds.y - 50.f }, IM_COL32(160, 140, 100, 200), navHint);
 		}
 
 		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
