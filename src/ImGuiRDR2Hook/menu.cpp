@@ -136,9 +136,6 @@ namespace
 	std::atomic<int> s_chapter{ 1 };
 	int s_lastChapterSeen = 1;
 
-	std::atomic<int> s_playerHonor{ 0 };
-	std::atomic<bool> s_isJohn{ false };
-
 	std::atomic<bool>  s_escDown{ false };     // ESC mantenido (leido por el script)
 	std::atomic<float> s_escProgress{ 0.f };   // Progreso 0..1 del mantener-ESC
 
@@ -659,36 +656,9 @@ namespace
 		TextCentered(dl, f, bookH * 0.040f, { ds.x * 0.5f, tc.y + titleSize * 2.20f },
 		             FadeCol(IM_COL32(206, 178, 136, 225), A), "- 1899 -");
 
-		const int honor = s_playerHonor.load();
-		const bool isJohn = s_isJohn.load();
-		const float sealY = bmin.y + bookH * 0.905f;
-		const float sealFontSize = bookH * 0.034f;
-		const ImU32 sealCol = FadeCol(IM_COL32(206, 178, 136, 220), A);
-
-		if (isJohn)
-		{
-			const char* arthurText = (honor >= 0)
-				? "Blessed are those who hunger and thirst for righteousness."
-				: "Blessed are those who mourn";
-			const ImVec2 arthurCenter = { ds.x * 0.5f, sealY - sealFontSize * 0.7f };
-			const ImVec2 arthurTopLeft = TextTopLeft(f, sealFontSize * 0.85f, arthurCenter, arthurText);
-			dl->AddText(f, sealFontSize * 0.85f, arthurTopLeft, FadeCol(IM_COL32(206, 178, 136, 120), A), arthurText);
-			const ImVec2 arthurTextSize = f->CalcTextSizeA(sealFontSize * 0.85f, FLT_MAX, 0.f, arthurText);
-			const float strikeY = arthurTopLeft.y + arthurTextSize.y * 0.55f;
-			dl->AddLine({ arthurTopLeft.x, strikeY }, { arthurTopLeft.x + arthurTextSize.x, strikeY },
-			            FadeCol(IM_COL32(206, 178, 136, 160), A), 1.5f);
-
-			const char* johnText = "Blessed are the peacemakers";
-			TextCentered(dl, f, sealFontSize, { ds.x * 0.5f, sealY + sealFontSize * 0.6f },
-			             sealCol, johnText);
-		}
-		else
-		{
-			const char* blessing = (honor >= 0)
-				? "Blessed are those who hunger and thirst for righteousness."
-				: "Blessed are those who mourn";
-			TextCentered(dl, f, sealFontSize, { ds.x * 0.5f, sealY }, sealCol, blessing);
-		}
+		// Sello del autor (parte inferior)
+		TextCentered(dl, f, bookH * 0.034f, { ds.x * 0.5f, bmin.y + bookH * 0.905f },
+		             FadeCol(IM_COL32(206, 178, 136, 220), A), "Blessed are the peacemakers");
 	}
 
 	// -----------------------------------------------------------------
@@ -1814,13 +1784,13 @@ void CImGuiMenu::Render()
 {
 	CustomBooks::HandleInput();
 
-	if (CustomBooks::IsInventoryOpen())
+	if (CustomBooks::IsInventoryOpen() && !GetIsOpen())
 	{
 		CustomBooks::RenderInventory();
 		return;
 	}
 
-	if (CustomBooks::IsBookOpen())
+	if (CustomBooks::IsBookOpen() && !GetIsOpen())
 	{
 		CustomBooks::RenderBook();
 		return;
@@ -2069,16 +2039,6 @@ void CImGuiMenu::SetWorldHour(int hour)
 void CImGuiMenu::SetChapter(int chapter)
 {
 	s_chapter.store(std::max(1, chapter));
-}
-
-void CImGuiMenu::SetPlayerHonor(int honor)
-{
-	s_playerHonor.store(honor);
-}
-
-void CImGuiMenu::SetIsJohn(bool isJohn)
-{
-	s_isJohn.store(isJohn);
 }
 
 void CImGuiMenu::SetJournalTitle(const std::string& title)

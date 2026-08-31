@@ -383,6 +383,44 @@ namespace CustomBooks
 		}
 	}
 
+	static std::vector<std::string> WrapText(const std::string& text, float maxWidth, ImFont* f, float fontSize)
+	{
+		std::vector<std::string> wrappedLines;
+		std::istringstream stream(text);
+		std::string line;
+		while (std::getline(stream, line))
+		{
+			if (line.empty())
+			{
+				wrappedLines.push_back("");
+				continue;
+			}
+
+			std::istringstream wordStream(line);
+			std::string word;
+			std::string currentLine;
+			while (wordStream >> word)
+			{
+				std::string testLine = currentLine.empty() ? word : currentLine + " " + word;
+				ImVec2 testSize = f->CalcTextSizeA(fontSize, FLT_MAX, 0.f, testLine.c_str());
+				if (testSize.x > maxWidth && !currentLine.empty())
+				{
+					wrappedLines.push_back(currentLine);
+					currentLine = word;
+				}
+				else
+				{
+					currentLine = testLine;
+				}
+			}
+			if (!currentLine.empty())
+			{
+				wrappedLines.push_back(currentLine);
+			}
+		}
+		return wrappedLines;
+	}
+
 	void RenderBook()
 	{
 		if (!s_bookOpen) return;
@@ -419,8 +457,18 @@ namespace CustomBooks
 		if (fontSize < 10.f) fontSize = 10.f;
 
 		ImU32 inkCol = GetInkColor(book.config.inkColor);
-		int linesPerPage = (int)(pageTextH / (fontSize * 1.6f));
+		float lineH = fontSize * 1.6f;
+		int linesPerPage = (int)(pageTextH / lineH);
 		if (linesPerPage < 1) linesPerPage = 1;
+
+		std::string fullText;
+		for (const auto& line : book.lines)
+		{
+			if (!fullText.empty()) fullText += "\n";
+			fullText += line;
+		}
+
+		std::vector<std::string> wrappedLines = WrapText(fullText, pageW, f, fontSize);
 
 		int leftPage = s_currentPage * 2;
 		int rightPage = leftPage + 1;
@@ -429,10 +477,10 @@ namespace CustomBooks
 		{
 			int startLine = pageIdx * linesPerPage;
 			float ty = py + margin;
-			for (int l = 0; l < linesPerPage && (startLine + l) < (int)book.lines.size(); ++l)
+			for (int l = 0; l < linesPerPage && (startLine + l) < (int)wrappedLines.size(); ++l)
 			{
-				const std::string& line = book.lines[startLine + l];
-				if (line.empty()) { ty += fontSize * 1.6f; continue; }
+				const std::string& line = wrappedLines[startLine + l];
+				if (line.empty()) { ty += lineH; continue; }
 				float tx = px;
 				if (book.config.textAlignment == 1)
 				{
@@ -440,7 +488,7 @@ namespace CustomBooks
 					tx = px + pw * 0.5f - ls.x * 0.5f;
 				}
 				dl->AddText(f, fontSize, { tx, ty }, inkCol, line.c_str(), nullptr, pw);
-				ty += fontSize * 1.6f;
+				ty += lineH;
 			}
 			char pnum[16];
 			snprintf(pnum, sizeof(pnum), "- %d -", pageIdx + 1);
@@ -451,7 +499,7 @@ namespace CustomBooks
 		float leftX = bx + margin;
 		float rightX = bx + bookW * 0.5f + margin * 0.5f;
 		drawPage(leftPage, leftX, by, pageW);
-		if (rightPage < (int)book.lines.size() / linesPerPage + 1)
+		if (rightPage < (int)wrappedLines.size() / linesPerPage + 1)
 			drawPage(rightPage, rightX, by, pageW);
 
 		const char* btitle = book.config.displayTitle.c_str();
@@ -464,7 +512,7 @@ namespace CustomBooks
 
 		if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, false))
 		{
-			if ((s_currentPage + 1) * 2 < (int)book.lines.size() / linesPerPage + 1)
+			if ((s_currentPage + 1) * 2 < (int)wrappedLines.size() / linesPerPage + 1)
 				s_currentPage++;
 		}
 		if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false))
