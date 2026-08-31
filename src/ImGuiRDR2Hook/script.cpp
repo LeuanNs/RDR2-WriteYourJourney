@@ -381,6 +381,23 @@ void main()
 				ForceCloseJournal();
 		}
 
+		// Bloqueo de controles para satchel/libros del mod (independiente del journal)
+		if (CustomBooks::IsInventoryOpen() || CustomBooks::IsBookOpen())
+		{
+			LockControlsThisFrame();
+
+			if (!GameHasFocus())
+			{
+				CustomBooks::CloseInventory();
+				CustomBooks::CloseBook();
+				WAIT(0);
+				continue;
+			}
+
+			WAIT(0);
+			continue;
+		}
+
 		if (!s_active)
 		{
 			if (WJConfig::BlessingValid && PlayerCanUseJournal())
@@ -412,15 +429,13 @@ void main()
 		}
 		else
 		{
-			// Bucle constante de bloqueo mientras el diario o satchel esta en uso
-			bool anyMenuOpen = CImGuiMenu::GetIsOpen() || CustomBooks::IsInventoryOpen() || CustomBooks::IsBookOpen();
-
+			// Bucle constante de bloqueo mientras el diario esta en uso
 			if (CImGuiMenu::IsAppreciatingView())
 			{
 				AppreciateViewControlsThisFrame();
 				HandleAppreciateViewExit();
 			}
-			else if (anyMenuOpen)
+			else
 			{
 				LockControlsThisFrame();
 
@@ -435,8 +450,6 @@ void main()
 			if (!GameHasFocus())
 			{
 				ForceCloseJournal();
-				CustomBooks::CloseInventory();
-				CustomBooks::CloseBook();
 				WAIT(0);
 				continue;
 			}
@@ -444,28 +457,30 @@ void main()
 			// SOS: salida de emergencia en cualquier momento (Y 10s)
 			HandleSos();
 
-			if (s_active || CustomBooks::IsInventoryOpen() || CustomBooks::IsBookOpen())
+			if (s_active) // El SOS pudo haber cerrado ya la sesion
 			{
 				if (PLAYER::IS_PLAYER_DEAD(PLAYER::PLAYER_ID()) ||
-				    (!CImGuiMenu::GetIsOpen() && !CustomBooks::IsInventoryOpen() && !CustomBooks::IsBookOpen()))
+				    !CImGuiMenu::GetIsOpen())
 				{
 					ForceCloseJournal();
 				}
 				else
 				{
-					if (s_active)
-					{
-						UpdateHoldingAnim();
-						HandleEscHold();
-						HandleDamageInterrupt();
-						CImGuiMenu::SetWorldHour(CLOCK::GET_CLOCK_HOURS());
-						CImGuiMenu::SetChapter(1);
-						CImGuiMenu::SetPlayerHonor(PLAYER::_GET_HONOR());
-						const Hash playerModel = ENTITY::GET_ENTITY_MODEL(PLAYER::PLAYER_PED_ID());
-						const Hash johnHash = MISC::GET_HASH_KEY("player_three");
-						CImGuiMenu::SetIsJohn(playerModel == johnHash);
-						UpdateJournalTitle();
-					}
+					UpdateHoldingAnim();
+					HandleEscHold();
+					HandleDamageInterrupt(); // TODO #7: cierra si el jugador recibe dano
+					// TODO #11: actualiza la hora del mundo para el tinte día/noche
+					CImGuiMenu::SetWorldHour(CLOCK::GET_CLOCK_HOURS());
+					// TODO #12: actualiza el capítulo actual para el directorio dinámico
+					// (usando una nativa de la campaña, si está disponible; por ahora fija en 1)
+					CImGuiMenu::SetChapter(1);
+
+					CImGuiMenu::SetPlayerHonor(PLAYER::_GET_HONOR());
+					const Hash playerModel = ENTITY::GET_ENTITY_MODEL(PLAYER::PLAYER_PED_ID());
+					const Hash johnHash = MISC::GET_HASH_KEY("player_three");
+					CImGuiMenu::SetIsJohn(playerModel == johnHash);
+
+					UpdateJournalTitle(); // TODO FASE7#1: red de seguridad si el modelo cambia a mitad de sesion
 				}
 			}
 		}
