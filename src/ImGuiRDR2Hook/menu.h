@@ -47,9 +47,6 @@ public:
 	// TODO #12: capítulo actual de la historia para directorio dinámico
 	static void SetChapter(int chapter);
 
-	static void SetPlayerHonor(int honor);
-	static void SetIsJohn(bool isJohn);
-
 	static void SetJournalTitle(const std::string& title);
 	static const std::string& GetJournalTitle() { return s_journalTitle; }
 

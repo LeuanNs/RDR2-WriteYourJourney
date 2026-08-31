@@ -475,11 +475,6 @@ void main()
 					// (usando una nativa de la campaña, si está disponible; por ahora fija en 1)
 					CImGuiMenu::SetChapter(1);
 
-					CImGuiMenu::SetPlayerHonor(PLAYER::_GET_HONOR());
-					const Hash playerModel = ENTITY::GET_ENTITY_MODEL(PLAYER::PLAYER_PED_ID());
-					const Hash johnHash = MISC::GET_HASH_KEY("player_three");
-					CImGuiMenu::SetIsJohn(playerModel == johnHash);
-
 					UpdateJournalTitle(); // TODO FASE7#1: red de seguridad si el modelo cambia a mitad de sesion
 				}
 			}
