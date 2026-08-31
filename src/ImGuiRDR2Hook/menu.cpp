@@ -166,7 +166,7 @@ namespace
 	fs::path SaveDirPath()
 	{
 		const int chapter = std::max(1, s_chapter.load());
-		return fs::path(WJConfig::GetModuleDir()) / "MyJourney" / "Myself" / ("C" + std::to_string(chapter));
+		return fs::path("myjourney") / "Myself" / ("C" + std::to_string(chapter));
 	}
 
 	fs::path PageFilePath(int page)
@@ -183,10 +183,7 @@ namespace
 	{
 		std::lock_guard<std::mutex> lock(s_fileMutex);
 
-		fs::path filePath = PageFilePath(page);
-		fs::create_directories(filePath.parent_path());
-
-		std::ofstream out(filePath, std::ios::binary | std::ios::trunc);
+		std::ofstream out(PageFilePath(page), std::ios::binary | std::ios::trunc);
 		if (out)
 			out.write(pb.text, (std::streamsize)std::strlen(pb.text));
 	}
@@ -237,10 +234,7 @@ namespace
 	{
 		std::lock_guard<std::mutex> lock(s_fileMutex);
 
-		fs::path filePath = DrawingFilePath(page);
-		fs::create_directories(filePath.parent_path());
-
-		std::ofstream out(filePath, std::ios::binary | std::ios::trunc);
+		std::ofstream out(DrawingFilePath(page), std::ios::binary | std::ios::trunc);
 		if (!out) return;
 
 		out.write((const char*)&DRAWING_MAGIC, sizeof(DRAWING_MAGIC));
