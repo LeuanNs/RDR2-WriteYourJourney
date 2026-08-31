@@ -166,7 +166,7 @@ namespace
 	fs::path SaveDirPath()
 	{
 		const int chapter = std::max(1, s_chapter.load());
-		return fs::path("myjourney") / "Myself" / ("C" + std::to_string(chapter));
+		return fs::path(WJConfig::GetModuleDir()) / "MyJourney" / "Myself" / ("C" + std::to_string(chapter));
 	}
 
 	fs::path PageFilePath(int page)
@@ -183,7 +183,10 @@ namespace
 	{
 		std::lock_guard<std::mutex> lock(s_fileMutex);
 
-		std::ofstream out(PageFilePath(page), std::ios::binary | std::ios::trunc);
+		fs::path filePath = PageFilePath(page);
+		fs::create_directories(filePath.parent_path());
+
+		std::ofstream out(filePath, std::ios::binary | std::ios::trunc);
 		if (out)
 			out.write(pb.text, (std::streamsize)std::strlen(pb.text));
 	}
@@ -234,7 +237,10 @@ namespace
 	{
 		std::lock_guard<std::mutex> lock(s_fileMutex);
 
-		std::ofstream out(DrawingFilePath(page), std::ios::binary | std::ios::trunc);
+		fs::path filePath = DrawingFilePath(page);
+		fs::create_directories(filePath.parent_path());
+
+		std::ofstream out(filePath, std::ios::binary | std::ios::trunc);
 		if (!out) return;
 
 		out.write((const char*)&DRAWING_MAGIC, sizeof(DRAWING_MAGIC));
@@ -659,9 +665,36 @@ namespace
 		TextCentered(dl, f, bookH * 0.040f, { ds.x * 0.5f, tc.y + titleSize * 2.20f },
 		             FadeCol(IM_COL32(206, 178, 136, 225), A), "- 1899 -");
 
-		// Sello del autor (parte inferior)
-		TextCentered(dl, f, bookH * 0.034f, { ds.x * 0.5f, bmin.y + bookH * 0.905f },
-		             FadeCol(IM_COL32(206, 178, 136, 220), A), "Blessed are those who hunger and thirst for righteousness.");
+		const int honor = s_playerHonor.load();
+		const bool isJohn = s_isJohn.load();
+		const float sealY = bmin.y + bookH * 0.905f;
+		const float sealFontSize = bookH * 0.034f;
+		const ImU32 sealCol = FadeCol(IM_COL32(206, 178, 136, 220), A);
+
+		if (isJohn)
+		{
+			const char* arthurText = (honor >= 0)
+				? "Blessed are those who hunger and thirst for righteousness."
+				: "Blessed are those who mourn";
+			const ImVec2 arthurCenter = { ds.x * 0.5f, sealY - sealFontSize * 0.7f };
+			const ImVec2 arthurTopLeft = TextTopLeft(f, sealFontSize * 0.85f, arthurCenter, arthurText);
+			dl->AddText(f, sealFontSize * 0.85f, arthurTopLeft, FadeCol(IM_COL32(206, 178, 136, 120), A), arthurText);
+			const ImVec2 arthurTextSize = f->CalcTextSizeA(sealFontSize * 0.85f, FLT_MAX, 0.f, arthurText);
+			const float strikeY = arthurTopLeft.y + arthurTextSize.y * 0.55f;
+			dl->AddLine({ arthurTopLeft.x, strikeY }, { arthurTopLeft.x + arthurTextSize.x, strikeY },
+			            FadeCol(IM_COL32(206, 178, 136, 160), A), 1.5f);
+
+			const char* johnText = "Blessed are the peacemakers";
+			TextCentered(dl, f, sealFontSize, { ds.x * 0.5f, sealY + sealFontSize * 0.6f },
+			             sealCol, johnText);
+		}
+		else
+		{
+			const char* blessing = (honor >= 0)
+				? "Blessed are those who hunger and thirst for righteousness."
+				: "Blessed are those who mourn";
+			TextCentered(dl, f, sealFontSize, { ds.x * 0.5f, sealY }, sealCol, blessing);
+		}
 	}
 
 	// -----------------------------------------------------------------
