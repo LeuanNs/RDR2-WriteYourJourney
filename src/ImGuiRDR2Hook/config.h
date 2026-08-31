@@ -115,10 +115,10 @@ namespace WJConfig
 				ReloadButton = VK_F5; // Default fallback
 		}
 
-		GetPrivateProfileStringA("Settings", "CustomBooks", "1", buf, sizeof(buf), iniPath.c_str());
+		GetPrivateProfileStringA("CustomBooks", "Enabled", "1", buf, sizeof(buf), iniPath.c_str());
 		CustomBooksEnabled = (std::atoi(buf) != 0);
 
-		GetPrivateProfileStringA("Settings", "CustomBooksKey", "B", buf, sizeof(buf), iniPath.c_str());
+		GetPrivateProfileStringA("CustomBooks", "Key", "B", buf, sizeof(buf), iniPath.c_str());
 		if (buf[0] >= 'a' && buf[0] <= 'z')
 			CustomBooksKey = (char)(buf[0] - 32);
 		else if (buf[0] >= 'A' && buf[0] <= 'Z')
