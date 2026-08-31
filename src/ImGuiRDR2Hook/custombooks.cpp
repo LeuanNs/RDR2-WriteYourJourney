@@ -193,7 +193,15 @@ namespace CustomBooks
 
 	void HandleInput()
 	{
-		bool bDown = (GetAsyncKeyState('B') & 0x8000) != 0;
+		if (!WJConfig::CustomBooksEnabled)
+		{
+			if (s_inventoryOpen) CloseInventory();
+			if (s_bookOpen) CloseBook();
+			return;
+		}
+
+		int vk = (int)(unsigned char)WJConfig::CustomBooksKey;
+		bool bDown = (GetAsyncKeyState(vk) & 0x8000) != 0;
 		if (bDown)
 		{
 			if (!s_bHeld)
