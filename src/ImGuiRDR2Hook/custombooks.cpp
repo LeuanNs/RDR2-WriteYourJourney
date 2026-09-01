@@ -461,51 +461,51 @@ namespace CustomBooks
 					s_selectedBookIdx = 0;
 			}
 
-			float metaY = by + bookH + 30.f;
+			float metaY = by + bookH + 20.f;
 			const char* dtitle = book.config.displayTitle.c_str();
-			ImVec2 dts = f->CalcTextSizeA(f->FontSize * 1.4f, FLT_MAX, 0.f, dtitle);
-			dl->AddText(f, f->FontSize * 1.4f, { ds.x * 0.5f - dts.x * 0.5f, metaY }, IM_COL32(230, 205, 160, 255), dtitle);
+			ImVec2 dts = f->CalcTextSizeA(f->FontSize * 1.3f, FLT_MAX, 0.f, dtitle);
+			dl->AddText(f, f->FontSize * 1.3f, { ds.x * 0.5f - dts.x * 0.5f, metaY }, IM_COL32(230, 205, 160, 255), dtitle);
 
 			char meta[256];
 			snprintf(meta, sizeof(meta), "by %s  |  %s",
 				book.config.author.c_str(),
 				book.config.category.c_str());
-			ImVec2 ms = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, meta);
-			dl->AddText(f, f->FontSize, { ds.x * 0.5f - ms.x * 0.5f, metaY + f->FontSize * 2.f }, IM_COL32(180, 160, 120, 220), meta);
+			ImVec2 ms = f->CalcTextSizeA(f->FontSize * 0.9f, FLT_MAX, 0.f, meta);
+			dl->AddText(f, f->FontSize * 0.9f, { ds.x * 0.5f - ms.x * 0.5f, metaY + f->FontSize * 1.5f }, IM_COL32(180, 160, 120, 220), meta);
 
 			// Bookmark menu
 			auto bmIt = s_bookmarks.find(s_currentBook);
 			bool hasBookmark = (bmIt != s_bookmarks.end() && bmIt->second >= 0);
 			if (hasBookmark || true) // Always show menu
 			{
-				const float bmMenuY = metaY + f->FontSize * 4.f;
-				const float bmItemH = f->FontSize * 1.6f;
-				const float bmMenuW = 300.f;
+				const float bmMenuY = metaY + f->FontSize * 3.f;
+				const float bmItemH = f->FontSize * 1.5f;
+				const float bmMenuW = 280.f;
 				const float bmMenuX = ds.x * 0.5f - bmMenuW * 0.5f;
 
 				dl->AddRectFilled({ bmMenuX, bmMenuY }, { bmMenuX + bmMenuW, bmMenuY + bmItemH * 3.2f }, IM_COL32(20, 15, 10, 200), 6.f);
 				dl->AddRect({ bmMenuX, bmMenuY }, { bmMenuX + bmMenuW, bmMenuY + bmItemH * 3.2f }, IM_COL32(180, 140, 90, 180), 6.f, 0, 2.f);
 
-				dl->AddText(f, f->FontSize, { bmMenuX + 15.f, bmMenuY + 8.f }, IM_COL32(234, 223, 197, 255), "Open:");
+				dl->AddText(f, f->FontSize * 0.95f, { bmMenuX + 12.f, bmMenuY + 8.f }, IM_COL32(234, 223, 197, 255), "Open:");
 
 				if (hasBookmark)
 				{
 					char bmText[64];
 					snprintf(bmText, sizeof(bmText), "K: Bookmark (Page %d)", bmIt->second + 1);
-					dl->AddText(f, f->FontSize * 0.9f, { bmMenuX + 15.f, bmMenuY + bmItemH + 8.f }, IM_COL32(255, 215, 0, 255), bmText);
+					dl->AddText(f, f->FontSize * 0.85f, { bmMenuX + 12.f, bmMenuY + bmItemH + 8.f }, IM_COL32(255, 215, 0, 255), bmText);
 				}
 				else
 				{
-					dl->AddText(f, f->FontSize * 0.9f, { bmMenuX + 15.f, bmMenuY + bmItemH + 8.f }, IM_COL32(120, 100, 80, 150), "K: Set Bookmark First");
+					dl->AddText(f, f->FontSize * 0.85f, { bmMenuX + 12.f, bmMenuY + bmItemH + 8.f }, IM_COL32(120, 100, 80, 150), "K: Set Bookmark First");
 				}
 
-				dl->AddText(f, f->FontSize * 0.9f, { bmMenuX + 15.f, bmMenuY + bmItemH * 2 + 8.f }, IM_COL32(200, 180, 140, 220), "Enter: From Beginning");
-				dl->AddText(f, f->FontSize * 0.9f, { bmMenuX + 15.f, bmMenuY + bmItemH * 3 + 8.f }, IM_COL32(200, 180, 140, 220), "R: Random Page");
+				dl->AddText(f, f->FontSize * 0.85f, { bmMenuX + 12.f, bmMenuY + bmItemH * 2 + 8.f }, IM_COL32(200, 180, 140, 220), "Enter: From Beginning");
+				dl->AddText(f, f->FontSize * 0.85f, { bmMenuX + 12.f, bmMenuY + bmItemH * 3 + 8.f }, IM_COL32(200, 180, 140, 220), "R: Random Page");
 			}
 
 			const char* navHint = "<- -> : Browse   |   K: Bookmark   |   ESC : Close";
-			ImVec2 ns = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, navHint);
-			dl->AddText(f, f->FontSize, { ds.x * 0.5f - ns.x * 0.5f, ds.y - 50.f }, IM_COL32(160, 140, 100, 200), navHint);
+			ImVec2 ns = f->CalcTextSizeA(f->FontSize * 0.85f, FLT_MAX, 0.f, navHint);
+			dl->AddText(f, f->FontSize * 0.85f, { ds.x * 0.5f - ns.x * 0.5f, ds.y - 40.f }, IM_COL32(160, 140, 100, 200), navHint);
 		}
 
 		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
