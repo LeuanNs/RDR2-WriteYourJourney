@@ -11,9 +11,12 @@ namespace fs = std::filesystem;
 
 namespace CustomBooks
 {
+	static std::vector<std::string> WrapText(const std::string& text, float maxWidth, ImFont* f, float fontSize);
+
 	static std::vector<std::string> s_availableBooks;
 	static std::unordered_map<std::string, CustomBook> s_loadedBooks;
 	static std::unordered_map<std::string, bool> s_ownedBooks;
+	static std::unordered_map<std::string, int> s_bookmarks; // bookmark page per book
 	static bool s_inventoryOpen = false;
 	static bool s_bookOpen = false;
 	static std::string s_currentBook;
@@ -22,6 +25,7 @@ namespace CustomBooks
 	static float s_bHoldTime = 0.f;
 	static bool s_bHeld = false;
 	static int s_selectedBookIdx = 0;
+	static bool s_showBookmarkMenu = false;
 
 	static fs::path GetBooksDir()
 	{
@@ -469,7 +473,37 @@ namespace CustomBooks
 			ImVec2 ms = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, meta);
 			dl->AddText(f, f->FontSize, { ds.x * 0.5f - ms.x * 0.5f, metaY + f->FontSize * 2.f }, IM_COL32(180, 160, 120, 220), meta);
 
-			const char* navHint = "<- -> : Browse   |   ENTER : Open   |   ESC : Close";
+			// Bookmark menu
+			auto bmIt = s_bookmarks.find(s_currentBook);
+			bool hasBookmark = (bmIt != s_bookmarks.end() && bmIt->second >= 0);
+			if (hasBookmark || true) // Always show menu
+			{
+				const float bmMenuY = metaY + f->FontSize * 4.f;
+				const float bmItemH = f->FontSize * 1.6f;
+				const float bmMenuW = 300.f;
+				const float bmMenuX = ds.x * 0.5f - bmMenuW * 0.5f;
+
+				dl->AddRectFilled({ bmMenuX, bmMenuY }, { bmMenuX + bmMenuW, bmMenuY + bmItemH * 3.2f }, IM_COL32(20, 15, 10, 200), 6.f);
+				dl->AddRect({ bmMenuX, bmMenuY }, { bmMenuX + bmMenuW, bmMenuY + bmItemH * 3.2f }, IM_COL32(180, 140, 90, 180), 6.f, 0, 2.f);
+
+				dl->AddText(f, f->FontSize, { bmMenuX + 15.f, bmMenuY + 8.f }, IM_COL32(234, 223, 197, 255), "Open:");
+
+				if (hasBookmark)
+				{
+					char bmText[64];
+					snprintf(bmText, sizeof(bmText), "K: Bookmark (Page %d)", bmIt->second + 1);
+					dl->AddText(f, f->FontSize * 0.9f, { bmMenuX + 15.f, bmMenuY + bmItemH + 8.f }, IM_COL32(255, 215, 0, 255), bmText);
+				}
+				else
+				{
+					dl->AddText(f, f->FontSize * 0.9f, { bmMenuX + 15.f, bmMenuY + bmItemH + 8.f }, IM_COL32(120, 100, 80, 150), "K: Set Bookmark First");
+				}
+
+				dl->AddText(f, f->FontSize * 0.9f, { bmMenuX + 15.f, bmMenuY + bmItemH * 2 + 8.f }, IM_COL32(200, 180, 140, 220), "Enter: From Beginning");
+				dl->AddText(f, f->FontSize * 0.9f, { bmMenuX + 15.f, bmMenuY + bmItemH * 3 + 8.f }, IM_COL32(200, 180, 140, 220), "R: Random Page");
+			}
+
+			const char* navHint = "<- -> : Browse   |   K: Bookmark   |   ESC : Close";
 			ImVec2 ns = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, navHint);
 			dl->AddText(f, f->FontSize, { ds.x * 0.5f - ns.x * 0.5f, ds.y - 50.f }, IM_COL32(160, 140, 100, 200), navHint);
 		}
@@ -499,7 +533,50 @@ namespace CustomBooks
 		{
 			if (!s_availableBooks.empty() && s_selectedBookIdx >= 0 && s_selectedBookIdx < (int)s_availableBooks.size())
 			{
+				s_currentPage = 0; // Open from beginning
 				OpenBook(s_availableBooks[s_selectedBookIdx]);
+			}
+		}
+
+		if (ImGui::IsKeyPressed(ImGuiKey_K, false))
+		{
+			if (!s_availableBooks.empty() && s_selectedBookIdx >= 0 && s_selectedBookIdx < (int)s_availableBooks.size())
+			{
+				const std::string& bookName = s_availableBooks[s_selectedBookIdx];
+				auto bmIt = s_bookmarks.find(bookName);
+				if (bmIt != s_bookmarks.end() && bmIt->second >= 0)
+				{
+					s_currentPage = bmIt->second; // Open at bookmark
+					OpenBook(bookName);
+				}
+			}
+		}
+
+		if (ImGui::IsKeyPressed(ImGuiKey_R, false))
+		{
+			if (!s_availableBooks.empty() && s_selectedBookIdx >= 0 && s_selectedBookIdx < (int)s_availableBooks.size())
+			{
+				const std::string& bookName = s_availableBooks[s_selectedBookIdx];
+				LoadBook(bookName);
+				auto& book = s_loadedBooks[bookName];
+				std::string fullText;
+				for (const auto& line : book.lines)
+				{
+					if (!fullText.empty()) fullText += "\n";
+					fullText += line;
+				}
+				ImFont* font = io.Fonts->Fonts[1] ? io.Fonts->Fonts[1] : io.Fonts->Fonts[0];
+				float fontSize = font->FontSize + book.config.fontSizeOverride;
+				if (fontSize < 10.f) fontSize = 10.f;
+				float bookW = ds.x * 0.6f;
+				float margin = 30.f;
+				float pageW = bookW * 0.5f - margin * 1.5f;
+				auto wrapped = WrapText(fullText, pageW, font, fontSize);
+				int linesPerPage = (int)((ds.y * 0.75f - margin * 2.f) / (fontSize * 1.6f));
+				if (linesPerPage < 1) linesPerPage = 1;
+				int totalPages = (int)wrapped.size() / linesPerPage + 1;
+				s_currentPage = rand() % totalPages;
+				OpenBook(bookName);
 			}
 		}
 	}
@@ -627,7 +704,34 @@ namespace CustomBooks
 		ImVec2 bts = f->CalcTextSizeA(f->FontSize * 1.2f, FLT_MAX, 0.f, btitle);
 		dl->AddText(f, f->FontSize * 1.2f, { ds.x * 0.5f - bts.x * 0.5f, by - f->FontSize * 2.f }, IM_COL32(234, 223, 197, 255), btitle);
 
-		const char* hint = "Arrows: Turn page   |   ESC: Close book";
+		// Bookmark menu overlay
+		{
+			const float menuY = ds.y * 0.12f;
+			const float itemH = f->FontSize * 1.8f;
+			const float menuW = 320.f;
+			const float menuX = ds.x * 0.5f - menuW * 0.5f;
+
+			dl->AddRectFilled({ menuX, menuY }, { menuX + menuW, menuY + itemH * 3.5f }, IM_COL32(20, 15, 10, 220), 6.f);
+			dl->AddRect({ menuX, menuY }, { menuX + menuW, menuY + itemH * 3.5f }, IM_COL32(180, 140, 90, 200), 6.f, 0, 2.f);
+
+			dl->AddText(f, f->FontSize * 1.2f, { menuX + 15.f, menuY + 10.f }, IM_COL32(234, 223, 197, 255), "Open Book:");
+
+			auto bmIt = s_bookmarks.find(s_currentBook);
+			bool hasBookmark = (bmIt != s_bookmarks.end() && bmIt->second > 0);
+			ImU32 kCol = hasBookmark ? IM_COL32(255, 215, 0, 255) : IM_COL32(120, 100, 80, 150);
+			char kText[128];
+			if (hasBookmark)
+				snprintf(kText, sizeof(kText), "K: Open at Bookmark (Page %d)", bmIt->second + 1);
+			else
+				snprintf(kText, sizeof(kText), "K: Set Bookmark First");
+			dl->AddText(f, f->FontSize, { menuX + 15.f, menuY + itemH + 15.f }, kCol, kText);
+
+			dl->AddText(f, f->FontSize, { menuX + 15.f, menuY + itemH * 2 + 15.f }, IM_COL32(200, 180, 140, 220), "Enter: Open from Beginning");
+			dl->AddText(f, f->FontSize, { menuX + 15.f, menuY + itemH * 3 + 15.f }, IM_COL32(200, 180, 140, 220), "R: Random Page");
+			dl->AddText(f, f->FontSize * 0.8f, { menuX + 15.f, menuY + itemH * 3.5f - 15.f }, IM_COL32(150, 130, 100, 180), "ESC: Close");
+		}
+
+		const char* hint = "Arrows: Turn page   |   K: Bookmark   |   ESC: Close book";
 		ImVec2 hs = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, hint);
 		dl->AddText(f, f->FontSize, { ds.x * 0.5f - hs.x * 0.5f, ds.y * 0.93f }, IM_COL32(200, 200, 200, 200), hint);
 
@@ -639,6 +743,11 @@ namespace CustomBooks
 		if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false))
 		{
 			if (s_currentPage > 0) s_currentPage--;
+		}
+		if (ImGui::IsKeyPressed(ImGuiKey_K, false))
+		{
+			// K: Set bookmark on current page
+			s_bookmarks[s_currentBook] = s_currentPage;
 		}
 		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
 		{
