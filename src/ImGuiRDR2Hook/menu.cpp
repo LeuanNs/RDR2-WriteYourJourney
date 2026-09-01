@@ -123,6 +123,9 @@ namespace
 	constexpr float ERASER_RADIUS_MAX = 80.0f;
 	constexpr float ERASER_RADIUS_STEP = 4.0f;
 
+	int    s_journalBookmark  = 0; // Pagina bookmark del journal (0 = sin bookmark)
+	bool   s_showBookmarkMenu = false;
+
 	bool   s_appreciatingView = false; // V: Apreciar la vista
 
 	// TODO #11: hora del mundo (0-23), la escribe script.cpp cada frame
@@ -1130,7 +1133,7 @@ namespace
 
 			const bool changed = ImGui::InputTextMultiline(
 				"##page", pb.text, TEXT_BUF_SIZE, ImVec2(-1.f, -1.f),
-				ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_CallbackEdit,
+				ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_CallbackEdit | ImGuiInputTextFlags_NoHorizontalScroll,
 				wrapCallback);
 
 			if (changed)
@@ -1499,7 +1502,7 @@ namespace
 			bgDl->AddCircle(mp, s_eraserRadius, IM_COL32(255, 255, 255, 220), 24, 1.5f);
 
 			const ImVec2 fs = ImGui::GetIO().DisplaySize;
-			bgDl->AddText(ImVec2(fs.x * 0.5f - 40.f, fs.y * 0.92f), IM_COL32(255, 255, 255, 200), "Z: + | X: -");
+			bgDl->AddText(ImVec2(fs.x * 0.5f - 40.f, fs.y * 0.95f), IM_COL32(255, 215, 0, 220), "Z: + | X: -");
 
 			if (inPage && !s_showDrawTools && ImGui::IsMouseDown(ImGuiMouseButton_Left))
 			{
@@ -1671,6 +1674,22 @@ namespace
 
 		if (s_state == eUiState::Cover)
 		{
+			// Bookmark menu keys
+			if (s_journalBookmark > 0)
+			{
+				if (ImGui::IsKeyPressed(ImGuiKey_K, false))
+				{
+					SelectPage(s_journalBookmark);
+					return;
+				}
+				if (ImGui::IsKeyPressed(ImGuiKey_R, false))
+				{
+					int randomPage = 1 + (rand() % 8);
+					SelectPage(randomPage);
+					return;
+				}
+			}
+
 			// Estado 1 -> Estado 2 con ENTER
 			if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
 			    ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false))
@@ -1757,6 +1776,11 @@ namespace
 				s_mode = ePageMode::Draw;
 				GetPageDrawing(s_selectedPage);
 			}
+		}
+		else if (ImGui::IsKeyPressed(ImGuiKey_K, false))
+		{
+			// K: Set bookmark on current page
+			s_journalBookmark = s_selectedPage;
 		}
 
 		// TODO p2#6: SHIFT durante escritura abre/cierra el panel de formato
@@ -1873,6 +1897,29 @@ void CImGuiMenu::Render()
 
 	DrawCover(dl, ds, s_fadeIn * (1.f - s_transition));
 	DrawOpenBook(dl, ds, s_fadeIn * s_transition);
+
+	// Bookmark menu overlay - show on cover
+	if (s_state == eUiState::Cover && s_journalBookmark > 0)
+	{
+		ImFont* f = GetJournalFont();
+		const float menuY = ds.y * 0.55f;
+		const float itemH = f->FontSize * 1.8f;
+		const float menuW = 300.f;
+		const float menuX = ds.x * 0.5f - menuW * 0.5f;
+
+		dl->AddRectFilled({ menuX, menuY }, { menuX + menuW, menuY + itemH * 3.2f }, IM_COL32(20, 15, 10, 220), 6.f);
+		dl->AddRect({ menuX, menuY }, { menuX + menuW, menuY + itemH * 3.2f }, IM_COL32(180, 140, 90, 200), 6.f, 0, 2.f);
+
+		dl->AddText(f, f->FontSize * 1.2f, { menuX + 15.f, menuY + 10.f }, IM_COL32(234, 223, 197, 255), "Open Journal:");
+
+		char kText[64];
+		snprintf(kText, sizeof(kText), "K: Open at Bookmark (Page %d)", s_journalBookmark);
+		dl->AddText(f, f->FontSize, { menuX + 15.f, menuY + itemH + 15.f }, IM_COL32(255, 215, 0, 255), kText);
+
+		dl->AddText(f, f->FontSize, { menuX + 15.f, menuY + itemH * 2 + 15.f }, IM_COL32(200, 180, 140, 220), "Enter: Open from Beginning");
+
+		dl->AddText(f, f->FontSize, { menuX + 15.f, menuY + itemH * 3 + 15.f }, IM_COL32(200, 180, 140, 220), "R: Random Page");
+	}
 
 	if (s_state == eUiState::Open && s_transition > 0.65f)
 	{
