@@ -14,6 +14,7 @@ namespace CustomBooks
 	static std::vector<std::string> WrapText(const std::string& text, float maxWidth, ImFont* f, float fontSize);
 
 	static std::vector<std::string> s_availableBooks;
+	static std::vector<std::string> s_filteredBooks; // filtered list for search
 	static std::unordered_map<std::string, CustomBook> s_loadedBooks;
 	static std::unordered_map<std::string, bool> s_ownedBooks;
 	static std::unordered_map<std::string, int> s_bookmarks; // bookmark page per book
@@ -26,6 +27,7 @@ namespace CustomBooks
 	static bool s_bHeld = false;
 	static int s_selectedBookIdx = 0;
 	static bool s_showBookmarkMenu = false;
+	static char s_searchBuffer[128] = {}; // search filter buffer
 
 	static fs::path GetBooksDir()
 	{
@@ -38,6 +40,39 @@ namespace CustomBooks
 		if (start == std::string::npos) return "";
 		size_t end = s.find_last_not_of(" \t\r\n");
 		return s.substr(start, end - start + 1);
+	}
+
+	static std::string ToLower(const std::string& s)
+	{
+		std::string result = s;
+		for (char& c : result)
+			c = (char)std::tolower((unsigned char)c);
+		return result;
+	}
+
+	static void ApplySearchFilter()
+	{
+		s_filteredBooks.clear();
+		std::string query = ToLower(Trim(std::string(s_searchBuffer)));
+		if (query.empty())
+		{
+			s_filteredBooks = s_availableBooks;
+			return;
+		}
+		for (const auto& name : s_availableBooks)
+		{
+			LoadBook(name);
+			auto& book = s_loadedBooks[name];
+			std::string title = ToLower(book.config.displayTitle);
+			std::string author = ToLower(book.config.author);
+			std::string category = ToLower(book.config.category);
+			if (title.find(query) != std::string::npos ||
+			    author.find(query) != std::string::npos ||
+			    category.find(query) != std::string::npos)
+			{
+				s_filteredBooks.push_back(name);
+			}
+		}
 	}
 
 	static void ParseConfig(const fs::path& path, BookConfig& cfg)
@@ -397,21 +432,81 @@ namespace CustomBooks
 
 		dl->AddRectFilled({ 0, 0 }, ds, IM_COL32(10, 8, 5, 230));
 
-		if (s_availableBooks.empty())
+		// Search bar at top
 		{
-			const char* empty = "No books found in MyJourney/Books/";
+			const float searchBarW = 400.f;
+			const float searchBarH = 35.f;
+			const float searchBarX = ds.x * 0.5f - searchBarW * 0.5f;
+			const float searchBarY = 30.f;
+
+			// Check if clicking on search bar
+			bool clickOnSearch = io.MousePos.x >= searchBarX && io.MousePos.x <= searchBarX + searchBarW &&
+			                     io.MousePos.y >= searchBarY && io.MousePos.y <= searchBarY + searchBarH;
+			if (clickOnSearch && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+			{
+				// Focus search - we'll handle typing below
+			}
+
+			dl->AddRectFilled({ searchBarX, searchBarY }, { searchBarX + searchBarW, searchBarY + searchBarH }, IM_COL32(30, 25, 20, 220), 4.f);
+			dl->AddRect({ searchBarX, searchBarY }, { searchBarX + searchBarW, searchBarY + searchBarH }, IM_COL32(180, 140, 90, 200), 4.f, 0, 2.f);
+
+			const char* searchHint = "Search: title, author, category...";
+			if (s_searchBuffer[0] == 0)
+			{
+				ImVec2 hs = f->CalcTextSizeA(f->FontSize * 0.9f, FLT_MAX, 0.f, searchHint);
+				dl->AddText(f, f->FontSize * 0.9f, { searchBarX + 10.f, searchBarY + 10.f }, IM_COL32(120, 100, 80, 180), searchHint);
+			}
+			else
+			{
+				dl->AddText(f, f->FontSize * 0.9f, { searchBarX + 10.f, searchBarY + 10.f }, IM_COL32(234, 223, 197, 255), s_searchBuffer);
+			}
+
+			// Handle typing in search bar (simple implementation)
+			for (int vk = 'A'; vk <= 'Z'; ++vk)
+			{
+				if (ImGui::IsKeyPressed((ImGuiKey)vk, false))
+				{
+					int len = (int)strlen(s_searchBuffer);
+					if (len < (int)sizeof(s_searchBuffer) - 1)
+					{
+						char c = (char)vk;
+						if (!(GetAsyncKeyState(VK_SHIFT) & 0x8000))
+							c = (char)std::tolower((unsigned char)c);
+						s_searchBuffer[len] = c;
+						s_searchBuffer[len + 1] = 0;
+						s_selectedBookIdx = 0;
+					}
+				}
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_Backspace, false))
+			{
+				int len = (int)strlen(s_searchBuffer);
+				if (len > 0)
+				{
+					s_searchBuffer[len - 1] = 0;
+					s_selectedBookIdx = 0;
+				}
+			}
+		}
+
+		// Apply filter
+		ApplySearchFilter();
+
+		if (s_filteredBooks.empty())
+		{
+			const char* empty = s_searchBuffer[0] ? "No books match your search" : "No books found in MyJourney/Books/";
 			ImVec2 es = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, empty);
 			dl->AddText(f, f->FontSize, { ds.x * 0.5f - es.x * 0.5f, ds.y * 0.5f }, IM_COL32(160, 140, 100, 200), empty);
 		}
 		else
 		{
-			if (s_selectedBookIdx >= (int)s_availableBooks.size())
+			if (s_selectedBookIdx >= (int)s_filteredBooks.size())
 				s_selectedBookIdx = 0;
 			if (s_selectedBookIdx < 0)
 				s_selectedBookIdx = 0;
 
-			LoadBook(s_availableBooks[s_selectedBookIdx]);
-			auto& book = s_loadedBooks[s_availableBooks[s_selectedBookIdx]];
+			LoadBook(s_filteredBooks[s_selectedBookIdx]);
+			auto& book = s_loadedBooks[s_filteredBooks[s_selectedBookIdx]];
 
 			float bookW = ds.x * 0.35f;
 			float bookH = ds.y * 0.70f;
@@ -450,12 +545,12 @@ namespace CustomBooks
 				if (s_selectedBookIdx > 0)
 					s_selectedBookIdx--;
 				else
-					s_selectedBookIdx = (int)s_availableBooks.size() - 1;
+					s_selectedBookIdx = (int)s_filteredBooks.size() - 1;
 			}
 
 			if (hoverRight && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
 			{
-				if (s_selectedBookIdx < (int)s_availableBooks.size() - 1)
+				if (s_selectedBookIdx < (int)s_filteredBooks.size() - 1)
 					s_selectedBookIdx++;
 				else
 					s_selectedBookIdx = 0;
@@ -517,32 +612,32 @@ namespace CustomBooks
 		{
 			if (s_selectedBookIdx > 0)
 				s_selectedBookIdx--;
-			else if (!s_availableBooks.empty())
-				s_selectedBookIdx = (int)s_availableBooks.size() - 1;
+			else if (!s_filteredBooks.empty())
+				s_selectedBookIdx = (int)s_filteredBooks.size() - 1;
 		}
 
 		if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, false))
 		{
-			if (s_selectedBookIdx < (int)s_availableBooks.size() - 1)
+			if (s_selectedBookIdx < (int)s_filteredBooks.size() - 1)
 				s_selectedBookIdx++;
-			else if (!s_availableBooks.empty())
+			else if (!s_filteredBooks.empty())
 				s_selectedBookIdx = 0;
 		}
 
 		if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false))
 		{
-			if (!s_availableBooks.empty() && s_selectedBookIdx >= 0 && s_selectedBookIdx < (int)s_availableBooks.size())
+			if (!s_filteredBooks.empty() && s_selectedBookIdx >= 0 && s_selectedBookIdx < (int)s_filteredBooks.size())
 			{
 				s_currentPage = 0; // Open from beginning
-				OpenBook(s_availableBooks[s_selectedBookIdx]);
+				OpenBook(s_filteredBooks[s_selectedBookIdx]);
 			}
 		}
 
 		if (ImGui::IsKeyPressed(ImGuiKey_K, false))
 		{
-			if (!s_availableBooks.empty() && s_selectedBookIdx >= 0 && s_selectedBookIdx < (int)s_availableBooks.size())
+			if (!s_filteredBooks.empty() && s_selectedBookIdx >= 0 && s_selectedBookIdx < (int)s_filteredBooks.size())
 			{
-				const std::string& bookName = s_availableBooks[s_selectedBookIdx];
+				const std::string& bookName = s_filteredBooks[s_selectedBookIdx];
 				auto bmIt = s_bookmarks.find(bookName);
 				if (bmIt != s_bookmarks.end() && bmIt->second >= 0)
 				{
@@ -554,9 +649,9 @@ namespace CustomBooks
 
 		if (ImGui::IsKeyPressed(ImGuiKey_R, false))
 		{
-			if (!s_availableBooks.empty() && s_selectedBookIdx >= 0 && s_selectedBookIdx < (int)s_availableBooks.size())
+			if (!s_filteredBooks.empty() && s_selectedBookIdx >= 0 && s_selectedBookIdx < (int)s_filteredBooks.size())
 			{
-				const std::string& bookName = s_availableBooks[s_selectedBookIdx];
+				const std::string& bookName = s_filteredBooks[s_selectedBookIdx];
 				LoadBook(bookName);
 				auto& book = s_loadedBooks[bookName];
 				std::string fullText;
