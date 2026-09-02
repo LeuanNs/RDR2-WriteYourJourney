@@ -45,6 +45,11 @@ namespace Sheets
 	static int s_nextSheetId = 1;
 	static bool s_scanned = false;
 
+	static bool s_walkingToSheet = false;
+	static float s_walkTargetX = 0.f, s_walkTargetY = 0.f, s_walkTargetZ = 0.f;
+	static int s_walkTargetId = -1;
+	static DWORD s_walkStartMs = 0;
+
 	static std::mutex s_sheetsMutex;
 
 	static fs::path GetDiscoverablesDir()
@@ -250,8 +255,16 @@ namespace Sheets
 
 	float GetRipProgress() { return s_ripProgress; }
 	void SetRipProgress(float p) { s_ripProgress = p; }
+	void DismissOverlay()
+	{
+		s_showingOverlay = false;
+		s_viewingDiscoverable = false;
+		s_viewingSheetId = -1;
+		s_overlayCache = RippedSheetCache();
+	}
 	int GetRipSourcePage() { return s_ripCache.sourcePage; }
 	bool GetRipFromJournal() { return s_ripCache.fromJournal; }
+	bool IsViewingDiscoverable() { return s_viewingDiscoverable; }
 	const std::string& GetRipBookName() { return s_ripCache.bookName; }
 
 	bool IsShowingOverlay() { return s_showingOverlay; }
@@ -265,6 +278,73 @@ namespace Sheets
 		auto it = s_rippedCustomPages.find(bookName);
 		if (it == s_rippedCustomPages.end()) return false;
 		return it->second.count(page) > 0;
+	}
+
+	int GetNextVisiblePage(int startPage)
+	{
+		for (int p = startPage; p < startPage + 20; ++p)
+		{
+			if (p < 1) continue;
+			if (!IsPageRipped(p, true)) return p;
+		}
+		return startPage;
+	}
+
+	bool IsWalkingToSheet() { return s_walkingToSheet; }
+
+	void GetNearbySheetCoords(float& x, float& y, float& z)
+	{
+		std::lock_guard<std::mutex> lock(s_sheetsMutex);
+		for (const auto& s : s_discoverableSheets)
+		{
+			if (s.id == s_nearbySheetId)
+			{
+				x = s.x; y = s.y; z = s.z;
+				return;
+			}
+		}
+		x = y = z = 0.f;
+	}
+
+	void StartWalkToSheet()
+	{
+		if (s_nearbySheetId < 0) return;
+		std::lock_guard<std::mutex> lock(s_sheetsMutex);
+		for (const auto& s : s_discoverableSheets)
+		{
+			if (s.id == s_nearbySheetId)
+			{
+				s_walkTargetX = s.x;
+				s_walkTargetY = s.y;
+				s_walkTargetZ = s.z;
+				s_walkTargetId = s.id;
+				s_walkingToSheet = true;
+				s_walkStartMs = GetTickCount();
+				break;
+			}
+		}
+	}
+
+	void CancelWalk()
+	{
+		s_walkingToSheet = false;
+		s_walkTargetId = -1;
+	}
+
+	bool UpdateWalk(float px, float py, float pz)
+	{
+		if (!s_walkingToSheet) return false;
+		float dx = px - s_walkTargetX;
+		float dy = py - s_walkTargetY;
+		float dz = pz - s_walkTargetZ;
+		float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+		DWORD elapsed = GetTickCount() - s_walkStartMs;
+		if (dist < 1.2f || elapsed > 5000)
+		{
+			s_walkingToSheet = false;
+			return true;
+		}
+		return false;
 	}
 
 	void StartRipPage(const std::string& text, const SheetDrawing& drawing, int page, bool fromJournal, const std::string& bookName, int chapter)
@@ -286,9 +366,19 @@ namespace Sheets
 
 		int page = s_ripCache.sourcePage;
 		if (s_ripCache.fromJournal)
+		{
 			s_rippedJournalPages.insert(page);
+			int partner = 0;
+			if (page == 2) partner = 3;
+			else if (page == 3) partner = 2;
+			else if (page % 2 == 0 && page >= 4) partner = page + 1;
+			else if (page % 2 == 1 && page >= 5) partner = page - 1;
+			if (partner > 0) s_rippedJournalPages.insert(partner);
+		}
 		else
+		{
 			s_rippedCustomPages[s_ripCache.bookName].insert(page);
+		}
 
 		SaveRippedPagesIndex();
 
@@ -372,17 +462,6 @@ namespace Sheets
 
 		if (!s_overlayCache.drawing.lines.empty())
 			SaveDrawingToFile(sheetDir / "sheet_draw.dat", s_overlayCache.drawing);
-
-		int page = s_overlayCache.sourcePage;
-		if (s_overlayCache.fromJournal)
-			s_rippedJournalPages.erase(page);
-		else
-		{
-			auto it = s_rippedCustomPages.find(s_overlayCache.bookName);
-			if (it != s_rippedCustomPages.end())
-				it->second.erase(page);
-		}
-		SaveRippedPagesIndex();
 
 		s_showingOverlay = false;
 		s_overlayCache = RippedSheetCache();
@@ -611,45 +690,63 @@ namespace Sheets
 		float pad = w * 0.08f;
 		ImVec2 tmin(mn.x + pad, mn.y + pad);
 		ImVec2 tmax(mx.x - pad, mx.y - pad);
+		float textW = tmax.x - tmin.x;
+		float fontSize = f->FontSize * 0.85f;
+		float lineH = fontSize * 1.45f;
+		float curY = tmin.y;
 
-		ImGui::SetNextWindowPos(tmin);
-		ImGui::SetNextWindowSize({ tmax.x - tmin.x, tmax.y - tmin.y });
+		dl->PushClipRect(mn, mx, true);
 
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.f);
-		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.f);
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
-		ImGui::PushStyleColor(ImGuiCol_Text, FadeCol(IM_COL32(48, 38, 30, 255), A));
-
-		ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-			ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
-			ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav |
-			ImGuiWindowFlags_NoBringToFrontOnFocus |
-			ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-			ImGuiWindowFlags_NoMouseInputs;
-
-		if (ImGui::Begin("##RippedSheetOverlay", nullptr, flags))
+		if (s_overlayCache.text.empty())
 		{
-			ImGui::PushFont(f);
-			ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + (tmax.x - tmin.x));
-			if (!s_overlayCache.text.empty())
-				ImGui::TextUnformatted(s_overlayCache.text.c_str());
-			else
-			{
-				ImGui::PushStyleColor(ImGuiCol_Text, FadeCol(IM_COL32(76, 62, 48, 200), A));
-				ImGui::TextUnformatted("(empty page)");
-				ImGui::PopStyleColor();
-			}
-			ImGui::PopTextWrapPos();
-			ImGui::PopFont();
+			const char* emptyMsg = "(empty page)";
+			ImVec2 msz = f->CalcTextSizeA(fontSize, FLT_MAX, 0.f, emptyMsg);
+			dl->AddText(f, fontSize, { mn.x + (w - msz.x) * 0.5f, mn.y + (h - msz.y) * 0.5f }, FadeCol(IM_COL32(76, 62, 48, 200), A), emptyMsg);
 		}
-		ImGui::End();
-
-		ImGui::PopStyleColor(3);
-		ImGui::PopStyleVar(5);
+		else
+		{
+			std::istringstream stream(s_overlayCache.text);
+			std::string rawLine;
+			while (std::getline(stream, rawLine))
+			{
+				if (curY + lineH > tmax.y) break;
+				if (rawLine.empty())
+				{
+					curY += lineH;
+					continue;
+				}
+				std::istringstream wordStream(rawLine);
+				std::string word;
+				std::string curLine;
+				auto flushLine = [&](bool last)
+				{
+					if (curLine.empty()) return;
+					dl->AddText(f, fontSize, { tmin.x, curY }, FadeCol(IM_COL32(48, 38, 30, 255), A), curLine.c_str());
+					curY += lineH;
+					curLine.clear();
+				};
+				while (wordStream >> word)
+				{
+					std::string testLine = curLine.empty() ? word : curLine + " " + word;
+					ImVec2 sz = f->CalcTextSizeA(fontSize, FLT_MAX, 0.f, testLine.c_str());
+					if (sz.x > textW && !curLine.empty())
+					{
+						flushLine(false);
+						if (curY + lineH > tmax.y) break;
+						curLine = word;
+					}
+					else
+					{
+						curLine = testLine;
+					}
+				}
+				if (!curLine.empty() && curY + lineH <= tmax.y + 0.1f)
+					flushLine(true);
+				else if (!curLine.empty())
+					flushLine(true);
+			}
+		}
+		dl->PopClipRect();
 
 		ImFont* df = ImGui::GetFont();
 		const float refH = 1080.f;

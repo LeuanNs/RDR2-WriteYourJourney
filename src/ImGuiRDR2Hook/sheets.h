@@ -60,6 +60,7 @@ namespace Sheets
 	bool IsAnimating();
 
 	bool IsPageRipped(int page, bool isJournal, const std::string& bookName = "");
+	int GetNextVisiblePage(int startPage);
 
 	void StartRipPage(const std::string& text, const SheetDrawing& drawing, int page, bool fromJournal, const std::string& bookName = "", int chapter = 1);
 	void ConfirmRip();
@@ -68,10 +69,18 @@ namespace Sheets
 	void LeaveSheetAtPlayer();
 	void RestorePage();
 
+	bool IsWalkingToSheet();
+	void StartWalkToSheet();
+	void CancelWalk();
+	bool UpdateWalk(float px, float py, float pz);
+	void GetNearbySheetCoords(float& x, float& y, float& z);
+
 	float GetRipProgress();
 	void SetRipProgress(float p);
+	void DismissOverlay();
 
 	int GetRipSourcePage();
 	bool GetRipFromJournal();
+	bool IsViewingDiscoverable();
 	const std::string& GetRipBookName();
 }
