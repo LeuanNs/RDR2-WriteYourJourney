@@ -1975,7 +1975,6 @@ void CImGuiMenu::Render()
 			Sheets::Render();
 		return;
 	}
-		return;
 
 	// V: Apreciar la vista - no dibujar ImGui
 	if (s_appreciatingView)
@@ -2068,12 +2067,11 @@ void CImGuiMenu::Render()
 		{
 			int leftPage = s_pagePair;
 			int rightPage = Sheets::GetNextVisiblePage(s_pagePair + 1);
-			if (rightPage == leftPage) rightPage = leftPage + 1;
+			if (rightPage == leftPage)
+				rightPage = Sheets::GetNextVisiblePage(leftPage + 1);
 			if (!Sheets::IsPageRipped(leftPage, true))
 				DrawPagePreview(g, leftPage, s_fadeIn);
 			if (!Sheets::IsPageRipped(rightPage, true))
-				DrawPagePreview(g, rightPage, s_fadeIn);
-			else if (rightPage != s_pagePair + 1)
 				DrawPagePreview(g, rightPage, s_fadeIn);
 			DrawPageOverviewGlow(dl, g, s_fadeIn);
 		}
