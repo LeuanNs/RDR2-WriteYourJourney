@@ -17,6 +17,7 @@
 #include "keyboard.h"
 #include "menu.h"
 #include "custombooks.h"
+#include "sheets.h"
 #include "config.h"
 #include "Hook/Manager.h"
 
@@ -44,7 +45,7 @@ namespace
 
 	constexpr int UNHOLSTER_MS = 3000; // Espera tras sacar el diario
 	constexpr int HOLSTER_MS   = 2000; // Espera tras guardar el diario
-	constexpr int ESC_HOLD_MS  = 5000; // TODO #10: ESC mantenido 5s para cierre universal
+	constexpr int ESC_HOLD_MS  = 3000; // ESC mantenido 3s para cierre
 	constexpr int SOS_HOLD_MS  = 10000; // SOS: Y mantenido 10s para desatascarse
 
 	// TODO #10: Modo Pánico - 5 toques de ESC en < 2 segundos
@@ -396,6 +397,46 @@ void main()
 
 			WAIT(0);
 			continue;
+		}
+
+		if (Sheets::IsShowingOverlay() && !s_active)
+		{
+			LockControlsThisFrame();
+
+			if (!GameHasFocus())
+			{
+				Sheets::RestorePage();
+				WAIT(0);
+				continue;
+			}
+
+			WAIT(0);
+			continue;
+		}
+
+		if (WJConfig::CustomBooksEnabled && !s_active && PlayerCanUseJournal())
+		{
+			const Ped ped = PlayerPed();
+			const Vector3 pos = ENTITY::GET_ENTITY_COORDS(ped, TRUE, TRUE);
+			CustomBooks::UpdatePickupPrompt(pos.x, pos.y, pos.z);
+			Sheets::SetPlayerCoords(pos.x, pos.y, pos.z);
+			Sheets::UpdatePickupPrompt(pos.x, pos.y, pos.z);
+
+			if (CustomBooks::IsNearPickup() && (SafeGetAsyncKeyState('E') & 0x0001) != 0)
+			{
+				CustomBooks::TryPickupBook(pos.x, pos.y, pos.z);
+			}
+
+			if (Sheets::IsNearPickup() && (SafeGetAsyncKeyState('E') & 0x0001) != 0)
+			{
+				Sheets::TryPickupSheet();
+			}
+		}
+		else if (s_active && PlayerCanUseJournal())
+		{
+			const Ped ped = PlayerPed();
+			const Vector3 pos = ENTITY::GET_ENTITY_COORDS(ped, TRUE, TRUE);
+			Sheets::SetPlayerCoords(pos.x, pos.y, pos.z);
 		}
 
 		if (!s_active)

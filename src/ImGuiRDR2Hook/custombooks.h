@@ -19,6 +19,12 @@ struct BookConfig
 	bool hasIndex = true;
 	bool autoOrderPages = true;
 	bool isOwned = false;
+	bool findable = false;
+	float locationX = 0.f;
+	float locationY = 0.f;
+	float locationZ = 0.f;
+	float pickupRadius = 10.f;
+	std::string pickupMessage = "Press E to pick up";
 };
 
 struct BookChapter
@@ -27,13 +33,25 @@ struct BookChapter
 	int lineIndex = 0;
 };
 
-struct CustomBook
+	struct CustomBook
+	{
+		std::string internalName;
+		BookConfig config;
+		std::vector<std::string> lines;
+		std::vector<BookChapter> chapters;
+		bool loaded = false;
+		int lazyStartLine = 0;
+		int lazyLoadedCount = 0;
+		int lazyTotalLines = 0;
+		int lazyTotalChars = 0;
+	};
+
+struct RibbonAnim
 {
-	std::string internalName;
-	BookConfig config;
-	std::vector<std::string> lines;
-	std::vector<BookChapter> chapters;
-	bool loaded = false;
+	float progress = 0.f;
+	bool active = false;
+	bool placing = true;
+	float textFade = 0.f;
 };
 
 namespace CustomBooks
@@ -59,4 +77,10 @@ namespace CustomBooks
 
 	void SetBookOwned(const std::string& internalName, bool owned);
 	bool IsBookOwned(const std::string& internalName);
+
+	void UpdatePickupPrompt(float playerX, float playerY, float playerZ);
+	bool TryPickupBook(float playerX, float playerY, float playerZ);
+	bool IsNearPickup();
+	const std::string& GetPickupMessage();
+	void RenderPickupPrompt();
 }

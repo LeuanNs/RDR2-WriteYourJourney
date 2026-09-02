@@ -18,6 +18,7 @@
 #include "menu.h"
 #include "config.h"
 #include "custombooks.h"
+#include "sheets.h"
 #include "Hook/Manager.h"
 
 #include <algorithm>
@@ -127,6 +128,14 @@ namespace
 	bool   s_showBookmarkMenu = false;
 
 	bool   s_appreciatingView = false; // V: Apreciar la vista
+
+	struct JournalRibbonAnim
+	{
+		float progress = 0.f;
+		bool active = false;
+		bool placing = true;
+	};
+	JournalRibbonAnim s_ribbonAnim;
 
 	// TODO #11: hora del mundo (0-23), la escribe script.cpp cada frame
 	// via CImGuiMenu::SetWorldHour (los natives solo corren en ese hilo).
@@ -574,12 +583,12 @@ namespace
 			FadeCol(IM_COL32(0, 0, 0, 115), A), round * 1.3f);
 
 		// Cuero base + gradiente vertical de desgaste
-		dl->AddRectFilled(bmin, bmax, FadeCol(IM_COL32(56, 37, 23, 255), A), round);
+		dl->AddRectFilled(bmin, bmax, FadeCol(IM_COL32(35, 22, 12, 255), A), round);
 		DrawVGradient(dl,
 			{ bmin.x + round * 0.7f, bmin.y + round * 0.7f },
 			{ bmax.x - round * 0.7f, bmax.y - round * 0.7f },
-			FadeCol(IM_COL32(76, 52, 33, 255), A),
-			FadeCol(IM_COL32(45, 29, 17, 255), A), 24);
+			FadeCol(IM_COL32(50, 32, 18, 255), A),
+			FadeCol(IM_COL32(28, 16, 8, 255), A), 24);
 
 		// Manchas y desgaste (deterministas)
 		dl->PushClipRect(bmin, bmax, true);
@@ -588,12 +597,12 @@ namespace
 		{
 			const float rx = Rng(seed), ry = Rng(seed), rr = Rng(seed);
 			const ImVec2 p(bmin.x + rx * bookW, bmin.y + ry * bookH);
-			const ImU32 c = (i & 1) ? IM_COL32(28, 17, 9, 26) : IM_COL32(122, 86, 54, 20);
+			const ImU32 c = (i & 1) ? IM_COL32(18, 10, 5, 26) : IM_COL32(80, 55, 30, 20);
 			dl->AddCircleFilled(p, 5.f + rr * bookW * 0.055f, FadeCol(c, A), 10);
 		}
 		// Borde aclarado por el uso
 		dl->AddRect({ bmin.x + 2.f, bmin.y + 2.f }, { bmax.x - 2.f, bmax.y - 2.f },
-		            FadeCol(IM_COL32(152, 112, 72, 42), A), round - 2.f, 0, 3.f);
+		            FadeCol(IM_COL32(100, 70, 40, 42), A), round - 2.f, 0, 3.f);
 		dl->PopClipRect();
 
 		// Doble marco grabado en relieve (sombra clara + trazo oscuro)
@@ -667,6 +676,48 @@ namespace
 	// -----------------------------------------------------------------
 	//  ESTADO 2 - Libro abierto (pliego crema, reglas, lomo sombreado)
 	// -----------------------------------------------------------------
+	void DrawRippedPageSlot(ImDrawList* dl, ImVec2 pgMin, ImVec2 pgMax, float A, bool isLeft)
+	{
+		unsigned seed = isLeft ? 1234u : 5678u;
+		float jagSize = 6.f;
+		float step = 10.f;
+
+		dl->AddRectFilled(pgMin, pgMax, FadeCol(IM_COL32(180, 165, 135, 120), A));
+
+		std::vector<ImVec2> tornEdge;
+		if (isLeft)
+		{
+			tornEdge.push_back(pgMax);
+			tornEdge.push_back({ pgMax.x, pgMin.y });
+			for (float y = pgMin.y; y <= pgMax.y; y += step)
+			{
+				float jx = pgMax.x - (Rng(seed) * jagSize);
+				tornEdge.push_back({ jx, y });
+			}
+		}
+		else
+		{
+			tornEdge.push_back(pgMin);
+			tornEdge.push_back({ pgMin.x, pgMax.y });
+			for (float y = pgMax.y; y >= pgMin.y; y -= step)
+			{
+				float jx = pgMin.x + (Rng(seed) * jagSize);
+				tornEdge.push_back({ jx, y });
+			}
+		}
+
+		if (tornEdge.size() >= 3)
+			dl->AddConvexPolyFilled(tornEdge.data(), (int)tornEdge.size(), FadeCol(IM_COL32(210, 200, 175, 200), A));
+
+		for (int i = 0; i < 5; ++i)
+		{
+			float rx = pgMin.x + Rng(seed) * (pgMax.x - pgMin.x);
+			float ry = pgMin.y + Rng(seed) * (pgMax.y - pgMin.y);
+			float rr = 2.f + Rng(seed) * 4.f;
+			dl->AddCircleFilled({ rx, ry }, rr, FadeCol(IM_COL32(240, 235, 220, 80), A), 6);
+		}
+	}
+
 	void DrawOpenBook(ImDrawList* dl, const ImVec2 ds, float A)
 	{
 		if (A <= 0.002f) return;
@@ -691,7 +742,7 @@ namespace
 		for (int i = 3; i >= 1; --i)
 		{
 			const float o = i * std::max(1.6f, spreadH * 0.0022f);
-			const ImU32 c = FadeCol(IM_COL32(206, 190, 158, 255), A);
+			const ImU32 c = FadeCol(IM_COL32(180, 165, 135, 255), A);
 			dl->AddRectFilled({ g.leftMin.x + o, g.leftMin.y + o },
 			                  { g.leftMax.x + o, g.leftMax.y + o }, c);
 			dl->AddRectFilled({ g.rightMin.x + o, g.rightMin.y + o },
@@ -699,12 +750,22 @@ namespace
 		}
 
 		// Paginas crema / pergamino
-		dl->AddRectFilled(g.leftMin, g.leftMax, FadeCol(IM_COL32(234, 223, 197, 255), A));
-		dl->AddRectFilled(g.rightMin, g.rightMax, FadeCol(IM_COL32(230, 218, 191, 255), A));
+		bool leftRipped = Sheets::IsPageRipped(s_pagePair, true);
+		bool rightRipped = Sheets::IsPageRipped(s_pagePair + 1, true);
+
+		if (leftRipped)
+			DrawRippedPageSlot(dl, g.leftMin, g.leftMax, A, true);
+		else
+			dl->AddRectFilled(g.leftMin, g.leftMax, FadeCol(IM_COL32(210, 200, 175, 255), A));
+
+		if (rightRipped)
+			DrawRippedPageSlot(dl, g.rightMin, g.rightMax, A, false);
+		else
+			dl->AddRectFilled(g.rightMin, g.rightMax, FadeCol(IM_COL32(205, 195, 168, 255), A));
 
 		// Envejecido por esquinas
-		const ImU32 ageHi = FadeCol(IM_COL32(242, 233, 210, 255), A);
-		const ImU32 ageLo = FadeCol(IM_COL32(216, 200, 168, 255), A);
+		const ImU32 ageHi = FadeCol(IM_COL32(218, 208, 185, 255), A);
+		const ImU32 ageLo = FadeCol(IM_COL32(190, 175, 145, 255), A);
 		dl->AddRectFilledMultiColor(g.leftMin, g.leftMax, ageHi, ageHi, ageLo, ageHi);
 		dl->AddRectFilledMultiColor(g.rightMin, g.rightMax, ageHi, ageHi, ageHi, ageLo);
 
@@ -773,7 +834,26 @@ namespace
 			const float rbW = spreadH * 0.026f;
 			const float rbX = g.leftMax.x + spineW * 0.30f;
 			const float rbY0 = g.spreadMin.y - m * 0.4f;
-			const float rbY1 = g.spreadMin.y + spreadH * 0.30f;
+
+			float defaultEnd = g.spreadMin.y + spreadH * 0.30f;
+			float fullEnd = g.spreadMax.y + m * 0.4f;
+			float rbY1 = defaultEnd;
+
+			if (s_ribbonAnim.active)
+			{
+				float t = s_ribbonAnim.progress;
+				float animT = (t < 0.25f) ? (t / 0.25f) : 1.f;
+				animT = 1.f - (1.f - animT) * (1.f - animT);
+				if (s_ribbonAnim.placing)
+					rbY1 = defaultEnd + (fullEnd - defaultEnd) * animT;
+				else
+					rbY1 = fullEnd + (defaultEnd - fullEnd) * animT;
+			}
+			else if (s_journalBookmark > 0)
+			{
+				rbY1 = fullEnd;
+			}
+
 			const ImVec2 pts[5] = {
 				{ rbX, rbY0 }, { rbX + rbW, rbY0 }, { rbX + rbW, rbY1 },
 				{ rbX + rbW * 0.5f, rbY1 - rbW * 0.85f }, { rbX, rbY1 } };
@@ -823,16 +903,36 @@ namespace
 		const float xm = std::max(ds.x * 0.018f, 10.f);
 
 		const char* left;
+		static char coverHelpBuf[256];
+		static char overviewHelpBuf[256];
 		if (s_state != eUiState::Open)
-			left = WJConfig::Help_Cover.c_str();
+		{
+			if (s_journalBookmark > 0)
+			{
+				snprintf(coverHelpBuf, sizeof(coverHelpBuf), "K: Open at Bookmark   |   %s",
+					WJConfig::Help_Cover.c_str());
+				left = coverHelpBuf;
+			}
+			else
+				left = WJConfig::Help_Cover.c_str();
+		}
 		else if (s_selectedPage == 0)
-			left = WJConfig::Help_Overview.c_str();
+		{
+			snprintf(overviewHelpBuf, sizeof(overviewHelpBuf), "%s   |   K: Place Bookmark",
+				WJConfig::Help_Overview.c_str());
+			left = overviewHelpBuf;
+		}
 		else if (s_zoomed)
 			left = WJConfig::Help_Zoom.c_str();
 		else if (s_mode == ePageMode::Draw)
 			left = WJConfig::Help_Draw.c_str();
 		else
-			left = WJConfig::Help_Write.c_str();
+		{
+			static char writeHelpBuf[512];
+			snprintf(writeHelpBuf, sizeof(writeHelpBuf), "%s   |   %s",
+				WJConfig::Help_Write.c_str(), WJConfig::Sheet_RipHint.c_str());
+			left = writeHelpBuf;
+		}
 		dl->AddText(df, fh, { xm, y }, FadeCol(COL_HELP, A), left);
 
 		const char* right = "Write your Journey - 1899";
@@ -1679,11 +1779,15 @@ namespace
 			{
 				if (ImGui::IsKeyPressed(ImGuiKey_K, false))
 				{
+					s_state = eUiState::Open;
+					s_transition = 1.f;
 					SelectPage(s_journalBookmark);
 					return;
 				}
 				if (ImGui::IsKeyPressed(ImGuiKey_R, false))
 				{
+					s_state = eUiState::Open;
+					s_transition = 1.f;
 					int randomPage = 1 + (rand() % 8);
 					SelectPage(randomPage);
 					return;
@@ -1779,8 +1883,39 @@ namespace
 		}
 		else if (ImGui::IsKeyPressed(ImGuiKey_K, false))
 		{
-			// K: Set bookmark on current page
-			s_journalBookmark = s_selectedPage;
+			if (s_journalBookmark == s_selectedPage)
+			{
+				s_journalBookmark = 0;
+				s_ribbonAnim.active = true;
+				s_ribbonAnim.progress = 0.f;
+				s_ribbonAnim.placing = false;
+			}
+			else
+			{
+				s_journalBookmark = s_selectedPage;
+				s_ribbonAnim.active = true;
+				s_ribbonAnim.progress = 0.f;
+				s_ribbonAnim.placing = true;
+			}
+		}
+		else if (ImGui::IsKeyPressed(ImGuiKey_P, false))
+		{
+			if (s_state == eUiState::Open && s_selectedPage != 0 && !s_zoomed && !Sheets::IsPageRipped(s_selectedPage, true))
+			{
+				PageBuffer& pb = GetPageBuffer(s_selectedPage);
+				PageDrawing& pd = GetPageDrawing(s_selectedPage);
+				SheetDrawing sd;
+				for (const auto& line : pd.lines)
+				{
+					SheetDrawingLine sdl;
+					sdl.points = line.points;
+					sdl.color = line.color;
+					sdl.thickness = line.thickness;
+					sdl.brush = (int)line.brush;
+					sd.lines.push_back(sdl);
+				}
+				Sheets::StartRipPage(pb.text, sd, s_selectedPage, true, "", s_chapter.load());
+			}
 		}
 
 		// TODO p2#6: SHIFT durante escritura abre/cierra el panel de formato
@@ -1819,6 +1954,17 @@ void CImGuiMenu::Render()
 		CustomBooks::RenderBook();
 		return;
 	}
+
+	CustomBooks::RenderPickupPrompt();
+
+	Sheets::HandleInput();
+	if (Sheets::IsShowingOverlay() || Sheets::IsAnimating())
+	{
+		Sheets::Render();
+		return;
+	}
+	Sheets::Render();
+	Sheets::RenderPickupPrompt();
 
 	if (!GetIsOpen())
 		return;
@@ -1898,29 +2044,6 @@ void CImGuiMenu::Render()
 	DrawCover(dl, ds, s_fadeIn * (1.f - s_transition));
 	DrawOpenBook(dl, ds, s_fadeIn * s_transition);
 
-	// Bookmark menu overlay - show on cover
-	if (s_state == eUiState::Cover && s_journalBookmark > 0)
-	{
-		ImFont* f = GetJournalFont();
-		const float menuY = ds.y * 0.55f;
-		const float itemH = f->FontSize * 1.8f;
-		const float menuW = 300.f;
-		const float menuX = ds.x * 0.5f - menuW * 0.5f;
-
-		dl->AddRectFilled({ menuX, menuY }, { menuX + menuW, menuY + itemH * 3.2f }, IM_COL32(20, 15, 10, 220), 6.f);
-		dl->AddRect({ menuX, menuY }, { menuX + menuW, menuY + itemH * 3.2f }, IM_COL32(180, 140, 90, 200), 6.f, 0, 2.f);
-
-		dl->AddText(f, f->FontSize * 1.2f, { menuX + 15.f, menuY + 10.f }, IM_COL32(234, 223, 197, 255), "Open Journal:");
-
-		char kText[64];
-		snprintf(kText, sizeof(kText), "K: Open at Bookmark (Page %d)", s_journalBookmark);
-		dl->AddText(f, f->FontSize, { menuX + 15.f, menuY + itemH + 15.f }, IM_COL32(255, 215, 0, 255), kText);
-
-		dl->AddText(f, f->FontSize, { menuX + 15.f, menuY + itemH * 2 + 15.f }, IM_COL32(200, 180, 140, 220), "Enter: Open from Beginning");
-
-		dl->AddText(f, f->FontSize, { menuX + 15.f, menuY + itemH * 3 + 15.f }, IM_COL32(200, 180, 140, 220), "R: Random Page");
-	}
-
 	if (s_state == eUiState::Open && s_transition > 0.65f)
 	{
 		const BookGeom g = ComputeBookGeom(ds);
@@ -1928,51 +2051,66 @@ void CImGuiMenu::Render()
 		if (s_selectedPage == 0)
 		{
 			// TODO p2#1: vista general -> previsualizacion de contenido + resplandor
-			DrawPagePreview(g, s_pagePair, s_fadeIn);
-			DrawPagePreview(g, s_pagePair + 1, s_fadeIn);
+			if (!Sheets::IsPageRipped(s_pagePair, true))
+				DrawPagePreview(g, s_pagePair, s_fadeIn);
+			if (!Sheets::IsPageRipped(s_pagePair + 1, true))
+				DrawPagePreview(g, s_pagePair + 1, s_fadeIn);
 			DrawPageOverviewGlow(dl, g, s_fadeIn);
 		}
 		else if (!s_zoomed && s_zoomT <= 0.01f)
 		{
 			// Renderizar la pagina opuesta (compañera) como preview de solo lectura
 			const int companionPage = IsPageOnRight(s_selectedPage) ? s_selectedPage - 1 : s_selectedPage + 1;
-			DrawPagePreview(g, companionPage, s_fadeIn);
+			if (!Sheets::IsPageRipped(companionPage, true))
+				DrawPagePreview(g, companionPage, s_fadeIn);
 
-			// TODO p2#4: Coexistencia de texto y dibujos con control de Z-Order
-			// Renderizar texto y dibujos simultaneamente segun s_drawingsOnTop
-			if (s_drawingsOnTop)
+			if (Sheets::IsPageRipped(s_selectedPage, true))
 			{
-				// Texto primero, dibujos encima
-				if (s_mode == ePageMode::Write)
-				{
-					DrawWritePage(g, s_selectedPage, s_fadeIn);
-					DrawFormatPanel(ds, s_fadeIn);
-				}
-				else
-					DrawReadPage(g, s_selectedPage, s_fadeIn);
-				// Dibujos encima del texto
-				DrawDrawingCanvas(g, s_selectedPage, s_fadeIn);
-				if (s_mode == ePageMode::Draw)
-				{
-					HandleDrawingInput(g, s_selectedPage);
-					DrawDrawingToolsPanel(ds, s_fadeIn);
-				}
+				ImFont* f = GetJournalFont();
+				const ImVec2 pmin = PageMin(g, s_selectedPage);
+				const ImVec2 pmax = PageMax(g, s_selectedPage);
+				const char* msg = "(Page ripped)";
+				ImVec2 msz = f->CalcTextSizeA(f->FontSize * 1.2f, FLT_MAX, 0.f, msg);
+				dl->AddText(f, f->FontSize * 1.2f, { (pmin.x + pmax.x) * 0.5f - msz.x * 0.5f, (pmin.y + pmax.y) * 0.5f - msz.y * 0.5f }, FadeCol(COL_INK_FADED, s_fadeIn), msg);
 			}
 			else
 			{
-				// Dibujos primero, texto encima
-				DrawDrawingCanvas(g, s_selectedPage, s_fadeIn);
-				if (s_mode == ePageMode::Write)
+				// TODO p2#4: Coexistencia de texto y dibujos con control de Z-Order
+				// Renderizar texto y dibujos simultaneamente segun s_drawingsOnTop
+				if (s_drawingsOnTop)
 				{
-					DrawWritePage(g, s_selectedPage, s_fadeIn);
-					DrawFormatPanel(ds, s_fadeIn);
+					// Texto primero, dibujos encima
+					if (s_mode == ePageMode::Write)
+					{
+						DrawWritePage(g, s_selectedPage, s_fadeIn);
+						DrawFormatPanel(ds, s_fadeIn);
+					}
+					else
+						DrawReadPage(g, s_selectedPage, s_fadeIn);
+					// Dibujos encima del texto
+					DrawDrawingCanvas(g, s_selectedPage, s_fadeIn);
+					if (s_mode == ePageMode::Draw)
+					{
+						HandleDrawingInput(g, s_selectedPage);
+						DrawDrawingToolsPanel(ds, s_fadeIn);
+					}
 				}
 				else
-					DrawReadPage(g, s_selectedPage, s_fadeIn);
-				if (s_mode == ePageMode::Draw)
 				{
-					HandleDrawingInput(g, s_selectedPage);
-					DrawDrawingToolsPanel(ds, s_fadeIn);
+					// Dibujos primero, texto encima
+					DrawDrawingCanvas(g, s_selectedPage, s_fadeIn);
+					if (s_mode == ePageMode::Write)
+					{
+						DrawWritePage(g, s_selectedPage, s_fadeIn);
+						DrawFormatPanel(ds, s_fadeIn);
+					}
+					else
+						DrawReadPage(g, s_selectedPage, s_fadeIn);
+					if (s_mode == ePageMode::Draw)
+					{
+						HandleDrawingInput(g, s_selectedPage);
+						DrawDrawingToolsPanel(ds, s_fadeIn);
+					}
 				}
 			}
 		}
@@ -1981,6 +2119,27 @@ void CImGuiMenu::Render()
 	// TODO #5: overlay de zoom (por encima del pliego, con su propia animacion)
 	if (s_selectedPage != 0 && (s_zoomed || s_zoomT > 0.01f))
 		DrawZoomPage(ds, s_selectedPage, s_fadeIn, s_zoomT);
+
+	if (s_ribbonAnim.active)
+	{
+		s_ribbonAnim.progress += io.DeltaTime / 2.5f;
+		if (s_ribbonAnim.progress >= 1.f)
+			s_ribbonAnim.active = false;
+
+		float t = s_ribbonAnim.progress;
+		if (t >= 0.15f && t <= 0.85f)
+		{
+			float textAlpha = 1.f;
+			if (t < 0.3f) textAlpha = (t - 0.15f) / 0.15f;
+			else if (t > 0.7f) textAlpha = (0.85f - t) / 0.15f;
+			const char* bmMsg = s_ribbonAnim.placing ? WJConfig::BookmarkSaved.c_str() : WJConfig::BookmarkRemoved.c_str();
+			ImFont* bf = GetJournalFont();
+			const BookGeom gAnim = ComputeBookGeom(ds);
+			ImVec2 msgSz = bf->CalcTextSizeA(bf->FontSize * 1.4f, FLT_MAX, 0.f, bmMsg);
+			dl->AddText(bf, bf->FontSize * 1.4f, { ds.x * 0.5f - msgSz.x * 0.5f, gAnim.spreadMin.y - bf->FontSize * 3.f + 5.f },
+				FadeCol(IM_COL32(234, 223, 197, 255), s_fadeIn * textAlpha), bmMsg);
+		}
+	}
 
 	DrawHelp(dl, ds, s_fadeIn);
 	DrawEscProgress(dl, ds, s_fadeIn);
@@ -2023,6 +2182,7 @@ void CImGuiMenu::OpenSession()
 	s_lastChapterSeen = std::max(1, s_chapter.load());
 	GetPageBuffer(1); // precarga la primera pagina del capitulo actual
 	CustomBooks::Init();
+	Sheets::Init();
 	SetIsOpen(true);
 	SetShouldDrawMouse(true);
 }

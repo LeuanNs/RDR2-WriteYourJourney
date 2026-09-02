@@ -24,6 +24,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="menu.cpp" />
     <ClCompile Include="custombooks.cpp" />
+    <ClCompile Include="sheets.cpp" />
     <ClCompile Include="script.cpp" />
     <ClCompile Include="stb_image.cpp" />
   </ItemGroup>
@@ -46,6 +47,7 @@
     <ClInclude Include="kiero\kiero.h" />
     <ClInclude Include="menu.h" />
     <ClInclude Include="custombooks.h" />
+    <ClInclude Include="sheets.h" />
     <ClInclude Include="script.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="config.h" />

@@ -27,7 +27,14 @@ namespace CustomBooks
 	static bool s_bHeld = false;
 	static int s_selectedBookIdx = 0;
 	static bool s_showBookmarkMenu = false;
-	static char s_searchBuffer[128] = {}; // search filter buffer
+	static char s_searchBuffer[128] = {};
+	static bool s_searchFocused = false;
+	constexpr int LAZY_CHUNK_SIZE = 500;
+	constexpr int LAZY_THRESHOLD = 100;
+	constexpr int LAZY_CHAR_THRESHOLD = 3000;
+	static RibbonAnim s_ribbonAnim;
+	static std::string s_nearbyBook;
+	static bool s_showPickupPrompt = false;
 
 	static fs::path GetBooksDir()
 	{
@@ -56,11 +63,16 @@ namespace CustomBooks
 		std::string query = ToLower(Trim(std::string(s_searchBuffer)));
 		if (query.empty())
 		{
-			s_filteredBooks = s_availableBooks;
+			for (const auto& name : s_availableBooks)
+			{
+				if (IsBookOwned(name))
+					s_filteredBooks.push_back(name);
+			}
 			return;
 		}
 		for (const auto& name : s_availableBooks)
 		{
+			if (!IsBookOwned(name)) continue;
 			LoadBook(name);
 			auto& book = s_loadedBooks[name];
 			std::string title = ToLower(book.config.displayTitle);
@@ -108,6 +120,12 @@ namespace CustomBooks
 			else if (key == "HasIndex") cfg.hasIndex = (val == "1");
 			else if (key == "AutoOrderPages") cfg.autoOrderPages = (val == "1");
 			else if (key == "isOwned") cfg.isOwned = (val == "1");
+			else if (key == "Findable") cfg.findable = (val == "1");
+			else if (key == "X") cfg.locationX = std::stof(val);
+			else if (key == "Y") cfg.locationY = std::stof(val);
+			else if (key == "Z") cfg.locationZ = std::stof(val);
+			else if (key == "PickupRadius") cfg.pickupRadius = std::stof(val);
+			else if (key == "PickupMessage") cfg.pickupMessage = val;
 		}
 	}
 
@@ -147,6 +165,31 @@ namespace CustomBooks
 			lines.push_back(line);
 	}
 
+	static void LoadChunk(CustomBook& book, int centerLine)
+	{
+		fs::path bodyPath = GetBooksDir() / book.internalName / "body.txt";
+		std::ifstream f(bodyPath);
+		if (!f) return;
+
+		int halfChunk = LAZY_CHUNK_SIZE / 2;
+		int startLine = std::max(0, centerLine - halfChunk);
+		int endLine = startLine + LAZY_CHUNK_SIZE;
+
+		book.lines.clear();
+		std::string line;
+		int lineNum = 0;
+		while (std::getline(f, line))
+		{
+			if (lineNum >= startLine && lineNum < endLine)
+				book.lines.push_back(line);
+			lineNum++;
+			if (lineNum >= endLine) break;
+		}
+
+		book.lazyStartLine = startLine;
+		book.lazyLoadedCount = (int)book.lines.size();
+	}
+
 	void Init()
 	{
 		ScanBooks();
@@ -167,10 +210,10 @@ namespace CustomBooks
 				{
 					BookConfig tempCfg;
 					ParseConfig(configPath, tempCfg);
-					if (tempCfg.isOwned)
+					if (tempCfg.isOwned || tempCfg.findable)
 					{
 						s_availableBooks.push_back(name);
-						s_ownedBooks[name] = true;
+						s_ownedBooks[name] = tempCfg.isOwned;
 					}
 				}
 			}
@@ -219,6 +262,24 @@ namespace CustomBooks
 		s_bookOpen = true;
 		s_inventoryOpen = false;
 		auto& book = s_loadedBooks[internalName];
+
+		book.lazyTotalLines = (int)book.lines.size();
+		book.lazyTotalChars = 0;
+		for (const auto& l : book.lines) book.lazyTotalChars += (int)l.size();
+
+		if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
+		{
+			book.lazyStartLine = 0;
+			book.lazyLoadedCount = std::min(LAZY_CHUNK_SIZE, book.lazyTotalLines);
+			std::vector<std::string> chunk(book.lines.begin(), book.lines.begin() + book.lazyLoadedCount);
+			book.lines = std::move(chunk);
+		}
+		else
+		{
+			book.lazyStartLine = 0;
+			book.lazyLoadedCount = book.lazyTotalLines;
+		}
+
 		int linesPerPage = 12;
 		s_totalPages = (int)((book.lines.size() + linesPerPage - 1) / linesPerPage);
 		if (s_totalPages < 1) s_totalPages = 1;
@@ -286,7 +347,7 @@ namespace CustomBooks
 			dl->AddRectFilled({ bx, by }, { bx + barW * progress, by + barH }, IM_COL32(200, 170, 100, 240), 4.f);
 			dl->AddRect({ bx, by }, { bx + barW, by + barH }, IM_COL32(120, 100, 70, 200), 4.f, 0, 1.5f);
 			ImFont* f = io.Fonts->Fonts[1] ? io.Fonts->Fonts[1] : io.Fonts->Fonts[0];
-			const char* label = "Opening Satchel...";
+			const char* label = WJConfig::CB_SatchelOpening.c_str();
 			ImVec2 ls = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, label);
 			dl->AddText(f, f->FontSize, { ds.x * 0.5f - ls.x * 0.5f, by - f->FontSize * 1.8f }, IM_COL32(234, 223, 197, (int)(200 * progress)), label);
 		}
@@ -324,11 +385,15 @@ namespace CustomBooks
 
 	static void DrawBookCover(ImDrawList* dl, const CustomBook& book, float bx, float by, float bookW, float bookH, float A)
 	{
-		ImU32 coverCol = IM_COL32(book.config.coverColorRGB[0], book.config.coverColorRGB[1], book.config.coverColorRGB[2], 255);
+		// Oscurecer el color del cover para que pegue con la estética de RDR2
+		ImU32 coverCol = IM_COL32(
+			(int)(book.config.coverColorRGB[0] * 0.55f),
+			(int)(book.config.coverColorRGB[1] * 0.55f),
+			(int)(book.config.coverColorRGB[2] * 0.55f), 255);
 		ImU32 darkCover = IM_COL32(
-			(int)(book.config.coverColorRGB[0] * 0.6f),
-			(int)(book.config.coverColorRGB[1] * 0.6f),
-			(int)(book.config.coverColorRGB[2] * 0.6f), 255);
+			(int)(book.config.coverColorRGB[0] * 0.35f),
+			(int)(book.config.coverColorRGB[1] * 0.35f),
+			(int)(book.config.coverColorRGB[2] * 0.35f), 255);
 
 		const float round = bookW * 0.04f;
 		dl->AddRectFilled({ bx, by }, { bx + bookW, by + bookH }, coverCol, round);
@@ -444,13 +509,17 @@ namespace CustomBooks
 			                     io.MousePos.y >= searchBarY && io.MousePos.y <= searchBarY + searchBarH;
 			if (clickOnSearch && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
 			{
-				// Focus search - we'll handle typing below
+				s_searchFocused = true;
+			}
+			else if (!clickOnSearch && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+			{
+				s_searchFocused = false;
 			}
 
 			dl->AddRectFilled({ searchBarX, searchBarY }, { searchBarX + searchBarW, searchBarY + searchBarH }, IM_COL32(30, 25, 20, 220), 4.f);
 			dl->AddRect({ searchBarX, searchBarY }, { searchBarX + searchBarW, searchBarY + searchBarH }, IM_COL32(180, 140, 90, 200), 4.f, 0, 2.f);
 
-			const char* searchHint = "Search: title, author, category...";
+			const char* searchHint = WJConfig::CB_SearchHint.c_str();
 			if (s_searchBuffer[0] == 0)
 			{
 				ImVec2 hs = f->CalcTextSizeA(f->FontSize * 0.9f, FLT_MAX, 0.f, searchHint);
@@ -461,30 +530,33 @@ namespace CustomBooks
 				dl->AddText(f, f->FontSize * 0.9f, { searchBarX + 10.f, searchBarY + 10.f }, IM_COL32(234, 223, 197, 255), s_searchBuffer);
 			}
 
-			// Handle typing in search bar (simple implementation)
-			for (int vk = 'A'; vk <= 'Z'; ++vk)
+			// Handle typing in search bar ONLY if focused
+			if (s_searchFocused)
 			{
-				if (ImGui::IsKeyPressed((ImGuiKey)vk, false))
+				for (int vk = 'A'; vk <= 'Z'; ++vk)
 				{
-					int len = (int)strlen(s_searchBuffer);
-					if (len < (int)sizeof(s_searchBuffer) - 1)
+					if (ImGui::IsKeyPressed((ImGuiKey)vk, false))
 					{
-						char c = (char)vk;
-						if (!(GetAsyncKeyState(VK_SHIFT) & 0x8000))
-							c = (char)std::tolower((unsigned char)c);
-						s_searchBuffer[len] = c;
-						s_searchBuffer[len + 1] = 0;
-						s_selectedBookIdx = 0;
+						int len = (int)strlen(s_searchBuffer);
+						if (len < (int)sizeof(s_searchBuffer) - 1)
+						{
+							char c = (char)vk;
+							if (!(GetAsyncKeyState(VK_SHIFT) & 0x8000))
+								c = (char)std::tolower((unsigned char)c);
+							s_searchBuffer[len] = c;
+							s_searchBuffer[len + 1] = 0;
+							s_selectedBookIdx = 0;
+						}
 					}
 				}
-			}
-			if (ImGui::IsKeyPressed(ImGuiKey_Backspace, false))
-			{
-				int len = (int)strlen(s_searchBuffer);
-				if (len > 0)
+				if (ImGui::IsKeyPressed(ImGuiKey_Backspace, false))
 				{
-					s_searchBuffer[len - 1] = 0;
-					s_selectedBookIdx = 0;
+					int len = (int)strlen(s_searchBuffer);
+					if (len > 0)
+					{
+						s_searchBuffer[len - 1] = 0;
+						s_selectedBookIdx = 0;
+					}
 				}
 			}
 		}
@@ -494,7 +566,7 @@ namespace CustomBooks
 
 		if (s_filteredBooks.empty())
 		{
-			const char* empty = s_searchBuffer[0] ? "No books match your search" : "No books found in MyJourney/Books/";
+			const char* empty = s_searchBuffer[0] ? WJConfig::CB_NoMatch.c_str() : WJConfig::CB_NoBooks.c_str();
 			ImVec2 es = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, empty);
 			dl->AddText(f, f->FontSize, { ds.x * 0.5f - es.x * 0.5f, ds.y * 0.5f }, IM_COL32(160, 140, 100, 200), empty);
 		}
@@ -568,37 +640,7 @@ namespace CustomBooks
 			ImVec2 ms = f->CalcTextSizeA(f->FontSize * 0.9f, FLT_MAX, 0.f, meta);
 			dl->AddText(f, f->FontSize * 0.9f, { ds.x * 0.5f - ms.x * 0.5f, metaY + f->FontSize * 1.5f }, IM_COL32(180, 160, 120, 220), meta);
 
-			// Bookmark menu
-			auto bmIt = s_bookmarks.find(s_currentBook);
-			bool hasBookmark = (bmIt != s_bookmarks.end() && bmIt->second >= 0);
-			if (hasBookmark || true) // Always show menu
-			{
-				const float bmMenuY = metaY + f->FontSize * 3.f;
-				const float bmItemH = f->FontSize * 1.5f;
-				const float bmMenuW = 280.f;
-				const float bmMenuX = ds.x * 0.5f - bmMenuW * 0.5f;
-
-				dl->AddRectFilled({ bmMenuX, bmMenuY }, { bmMenuX + bmMenuW, bmMenuY + bmItemH * 3.2f }, IM_COL32(20, 15, 10, 200), 6.f);
-				dl->AddRect({ bmMenuX, bmMenuY }, { bmMenuX + bmMenuW, bmMenuY + bmItemH * 3.2f }, IM_COL32(180, 140, 90, 180), 6.f, 0, 2.f);
-
-				dl->AddText(f, f->FontSize * 0.95f, { bmMenuX + 12.f, bmMenuY + 8.f }, IM_COL32(234, 223, 197, 255), "Open:");
-
-				if (hasBookmark)
-				{
-					char bmText[64];
-					snprintf(bmText, sizeof(bmText), "K: Bookmark (Page %d)", bmIt->second + 1);
-					dl->AddText(f, f->FontSize * 0.85f, { bmMenuX + 12.f, bmMenuY + bmItemH + 8.f }, IM_COL32(255, 215, 0, 255), bmText);
-				}
-				else
-				{
-					dl->AddText(f, f->FontSize * 0.85f, { bmMenuX + 12.f, bmMenuY + bmItemH + 8.f }, IM_COL32(120, 100, 80, 150), "K: Set Bookmark First");
-				}
-
-				dl->AddText(f, f->FontSize * 0.85f, { bmMenuX + 12.f, bmMenuY + bmItemH * 2 + 8.f }, IM_COL32(200, 180, 140, 220), "Enter: From Beginning");
-				dl->AddText(f, f->FontSize * 0.85f, { bmMenuX + 12.f, bmMenuY + bmItemH * 3 + 8.f }, IM_COL32(200, 180, 140, 220), "R: Random Page");
-			}
-
-			const char* navHint = "<- -> : Browse   |   K: Bookmark   |   ESC : Close";
+			const char* navHint = WJConfig::CB_NavHintRandom.c_str();
 			ImVec2 ns = f->CalcTextSizeA(f->FontSize * 0.85f, FLT_MAX, 0.f, navHint);
 			dl->AddText(f, f->FontSize * 0.85f, { ds.x * 0.5f - ns.x * 0.5f, ds.y - 40.f }, IM_COL32(160, 140, 100, 200), navHint);
 		}
@@ -641,9 +683,16 @@ namespace CustomBooks
 				auto bmIt = s_bookmarks.find(bookName);
 				if (bmIt != s_bookmarks.end() && bmIt->second >= 0)
 				{
-					s_currentPage = bmIt->second; // Open at bookmark
-					OpenBook(bookName);
+					s_currentPage = bmIt->second;
 				}
+				else
+				{
+					s_currentPage = 0;
+				}
+				OpenBook(bookName);
+				s_ribbonAnim.active = true;
+				s_ribbonAnim.progress = 0.f;
+				s_ribbonAnim.placing = true;
 			}
 		}
 
@@ -754,6 +803,27 @@ namespace CustomBooks
 		int linesPerPage = (int)(pageTextH / lineH);
 		if (linesPerPage < 1) linesPerPage = 1;
 
+		if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
+		{
+			int linesPerPage = (int)(pageTextH / lineH);
+			if (linesPerPage < 1) linesPerPage = 1;
+			int pagesPerChunk = LAZY_CHUNK_SIZE / linesPerPage;
+			int thresholdPages = LAZY_THRESHOLD / linesPerPage;
+			if (thresholdPages < 1) thresholdPages = 1;
+
+			if (s_currentPage + thresholdPages >= (int)(book.lines.size() / linesPerPage + 1) &&
+			    book.lazyStartLine + book.lazyLoadedCount < book.lazyTotalLines)
+			{
+				int newCenter = book.lazyStartLine + s_currentPage * linesPerPage + LAZY_CHUNK_SIZE / 4;
+				LoadChunk(book, newCenter);
+			}
+			else if (s_currentPage < thresholdPages && book.lazyStartLine > 0)
+			{
+				int newCenter = book.lazyStartLine + s_currentPage * linesPerPage - LAZY_CHUNK_SIZE / 4;
+				LoadChunk(book, newCenter);
+			}
+		}
+
 		std::string fullText;
 		for (const auto& line : book.lines)
 		{
@@ -799,34 +869,39 @@ namespace CustomBooks
 		ImVec2 bts = f->CalcTextSizeA(f->FontSize * 1.2f, FLT_MAX, 0.f, btitle);
 		dl->AddText(f, f->FontSize * 1.2f, { ds.x * 0.5f - bts.x * 0.5f, by - f->FontSize * 2.f }, IM_COL32(234, 223, 197, 255), btitle);
 
-		// Bookmark menu overlay
+		if (s_ribbonAnim.active)
 		{
-			const float menuY = ds.y * 0.12f;
-			const float itemH = f->FontSize * 1.8f;
-			const float menuW = 320.f;
-			const float menuX = ds.x * 0.5f - menuW * 0.5f;
+			float t = s_ribbonAnim.progress;
+			float ribbonT = (t < 0.25f) ? (t / 0.25f) : 1.f;
+			ribbonT = 1.f - (1.f - ribbonT) * (1.f - ribbonT);
+			float ribbonH = bookH * ribbonT;
+			float ribbonW = 12.f;
+			float ribbonX = bx + bookW * 0.5f - ribbonW * 0.5f;
+			float ribbonY = by + (bookH - ribbonH) * 0.5f;
 
-			dl->AddRectFilled({ menuX, menuY }, { menuX + menuW, menuY + itemH * 3.5f }, IM_COL32(20, 15, 10, 220), 6.f);
-			dl->AddRect({ menuX, menuY }, { menuX + menuW, menuY + itemH * 3.5f }, IM_COL32(180, 140, 90, 200), 6.f, 0, 2.f);
+			const ImVec2 rbPts[5] = {
+				{ ribbonX, by - 5.f },
+				{ ribbonX + ribbonW, by - 5.f },
+				{ ribbonX + ribbonW, ribbonY + ribbonH },
+				{ ribbonX + ribbonW * 0.5f, ribbonY + ribbonH - ribbonW * 0.85f },
+				{ ribbonX, ribbonY + ribbonH }
+			};
+			dl->AddConvexPolyFilled(rbPts, 5, IM_COL32(116, 28, 24, 240));
+			dl->AddPolyline(rbPts, 5, IM_COL32(84, 18, 15, 240), ImDrawFlags_None, 1.2f);
 
-			dl->AddText(f, f->FontSize * 1.2f, { menuX + 15.f, menuY + 10.f }, IM_COL32(234, 223, 197, 255), "Open Book:");
-
-			auto bmIt = s_bookmarks.find(s_currentBook);
-			bool hasBookmark = (bmIt != s_bookmarks.end() && bmIt->second > 0);
-			ImU32 kCol = hasBookmark ? IM_COL32(255, 215, 0, 255) : IM_COL32(120, 100, 80, 150);
-			char kText[128];
-			if (hasBookmark)
-				snprintf(kText, sizeof(kText), "K: Open at Bookmark (Page %d)", bmIt->second + 1);
-			else
-				snprintf(kText, sizeof(kText), "K: Set Bookmark First");
-			dl->AddText(f, f->FontSize, { menuX + 15.f, menuY + itemH + 15.f }, kCol, kText);
-
-			dl->AddText(f, f->FontSize, { menuX + 15.f, menuY + itemH * 2 + 15.f }, IM_COL32(200, 180, 140, 220), "Enter: Open from Beginning");
-			dl->AddText(f, f->FontSize, { menuX + 15.f, menuY + itemH * 3 + 15.f }, IM_COL32(200, 180, 140, 220), "R: Random Page");
-			dl->AddText(f, f->FontSize * 0.8f, { menuX + 15.f, menuY + itemH * 3.5f - 15.f }, IM_COL32(150, 130, 100, 180), "ESC: Close");
+			if (t >= 0.15f && t <= 0.85f)
+			{
+				float textAlpha = 1.f;
+				if (t < 0.3f) textAlpha = (t - 0.15f) / 0.15f;
+				else if (t > 0.7f) textAlpha = (0.85f - t) / 0.15f;
+				const char* bmMsg = s_ribbonAnim.placing ? WJConfig::BookmarkSaved.c_str() : WJConfig::BookmarkRemoved.c_str();
+				ImVec2 msgSz = f->CalcTextSizeA(f->FontSize * 1.4f, FLT_MAX, 0.f, bmMsg);
+				dl->AddText(f, f->FontSize * 1.4f, { ds.x * 0.5f - msgSz.x * 0.5f, by - f->FontSize * 3.f },
+					IM_COL32(234, 223, 197, (int)(255 * textAlpha)), bmMsg);
+			}
 		}
 
-		const char* hint = "Arrows: Turn page   |   K: Bookmark   |   ESC: Close book";
+		const char* hint = WJConfig::CB_BookNavHint.c_str();
 		ImVec2 hs = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, hint);
 		dl->AddText(f, f->FontSize, { ds.x * 0.5f - hs.x * 0.5f, ds.y * 0.93f }, IM_COL32(200, 200, 200, 200), hint);
 
@@ -841,13 +916,33 @@ namespace CustomBooks
 		}
 		if (ImGui::IsKeyPressed(ImGuiKey_K, false))
 		{
-			// K: Set bookmark on current page
-			s_bookmarks[s_currentBook] = s_currentPage;
+			auto bmIt = s_bookmarks.find(s_currentBook);
+			if (bmIt != s_bookmarks.end() && bmIt->second == s_currentPage)
+			{
+				s_bookmarks.erase(s_currentBook);
+				s_ribbonAnim.active = true;
+				s_ribbonAnim.progress = 0.f;
+				s_ribbonAnim.placing = false;
+			}
+			else
+			{
+				s_bookmarks[s_currentBook] = s_currentPage;
+				s_ribbonAnim.active = true;
+				s_ribbonAnim.progress = 0.f;
+				s_ribbonAnim.placing = true;
+			}
 		}
 		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
 		{
 			CloseBook();
 			OpenInventory();
+		}
+
+		if (s_ribbonAnim.active)
+		{
+			s_ribbonAnim.progress += io.DeltaTime / 2.5f;
+			if (s_ribbonAnim.progress >= 1.f)
+				s_ribbonAnim.active = false;
 		}
 	}
 
@@ -908,5 +1003,86 @@ namespace CustomBooks
 		ParseConfig(configPath, cfg);
 		s_ownedBooks[internalName] = cfg.isOwned;
 		return cfg.isOwned;
+	}
+
+	void UpdatePickupPrompt(float playerX, float playerY, float playerZ)
+	{
+		s_nearbyBook.clear();
+		s_showPickupPrompt = false;
+
+		for (const auto& bookName : s_availableBooks)
+		{
+			LoadBook(bookName);
+			auto& book = s_loadedBooks[bookName];
+			if (!book.config.findable) continue;
+			if (IsBookOwned(bookName)) continue;
+
+			float dx = playerX - book.config.locationX;
+			float dy = playerY - book.config.locationY;
+			float dz = playerZ - book.config.locationZ;
+			float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+			if (dist <= book.config.pickupRadius)
+			{
+				s_nearbyBook = bookName;
+				s_showPickupPrompt = true;
+				break;
+			}
+		}
+	}
+
+	bool TryPickupBook(float playerX, float playerY, float playerZ)
+	{
+		if (!s_showPickupPrompt || s_nearbyBook.empty()) return false;
+
+		LoadBook(s_nearbyBook);
+		auto& book = s_loadedBooks[s_nearbyBook];
+
+		float dx = playerX - book.config.locationX;
+		float dy = playerY - book.config.locationY;
+		float dz = playerZ - book.config.locationZ;
+		float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+		if (dist <= book.config.pickupRadius)
+		{
+			SetBookOwned(s_nearbyBook, true);
+			s_showPickupPrompt = false;
+			s_nearbyBook.clear();
+			return true;
+		}
+		return false;
+	}
+
+	bool IsNearPickup()
+	{
+		return s_showPickupPrompt;
+	}
+
+	const std::string& GetPickupMessage()
+	{
+		if (!s_nearbyBook.empty())
+		{
+			LoadBook(s_nearbyBook);
+			return s_loadedBooks[s_nearbyBook].config.pickupMessage;
+		}
+		static std::string empty;
+		return empty;
+	}
+
+	void RenderPickupPrompt()
+	{
+		if (!s_showPickupPrompt || s_nearbyBook.empty()) return;
+
+		ImGuiIO& io = ImGui::GetIO();
+		ImDrawList* dl = ImGui::GetBackgroundDrawList();
+		ImVec2 ds = io.DisplaySize;
+		ImFont* f = io.Fonts->Fonts[1] ? io.Fonts->Fonts[1] : io.Fonts->Fonts[0];
+
+		const char* msg = GetPickupMessage().c_str();
+		ImVec2 msgSz = f->CalcTextSizeA(f->FontSize * 1.2f, FLT_MAX, 0.f, msg);
+		float x = ds.x * 0.5f - msgSz.x * 0.5f;
+		float y = ds.y * 0.75f;
+
+		dl->AddText(f, f->FontSize * 1.2f, { x, y }, IM_COL32(234, 223, 197, 255), msg);
 	}
 }

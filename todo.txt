@@ -1,0 +1,32 @@
+# TODO - Write Your Journey - Actualizado 2026-09-02 desde Documentacion/ideas.md + refinamiento usuario
+# Filtrado contra Documentacion/CHANGELOG.md [2026-09-02]: Idea 2 completada.
+# Previous TODO limpiado el 2026-09-02 (bookmarks, ribbon, ESC 3s, lazy loading 3000, localizacion, mini-cuadro) ya en CHANGELOG.
+
+================================================================================
+# IDEAS PENDIENTES (referencia, no implementadas)
+================================================================================
+
+- Idea 3 - Diarios de NPCs al lootear
+  Al lootear cadaver % de encontrar diario lore-friendly, algunos con pista tesoro.
+  TODO: detectar evento loot (hook _GET_PED_MONEY o inventario cadaver), array templates en myjourney/custom/npc_diaries/ {npcHash, content, hasTreasureHint, treasureCoords}, roll 15% al lootear, add "NPC Diary" a inventario, UI item "Diary" abre diario, si hasTreasureHint mostrar waypoint en mapa.
+
+- Idea 4 - Sistema de cartas
+  Escribir carta, guardarla como item/sello, enviar a personaje via cartero/NPC, recibir respuestas hardcodeadas.
+  TODO: carpeta myjourney/letters/ {to, from, content, sent}, UI modo escritura "Save as letter" crea item inventario, detectar NPCs correo via PED::GET_ENTITY_MODEL, menu "Send letter to..." (Mary, Dutch...), mapa {characterName, responseLetterId}, al enviar sent=true y crear carta respuesta, UI "Unread letters" abre diario.
+
+- Idea 5 - Detectar misiones completadas para otorgar items
+  Tras mision especifica otorgar item unico (ej: Biblia tras mision Swanson).
+  TODO: array mission rewards {missionHash, itemId, alreadyGranted}, script.cpp cada frame STATS::STAT_GET_INT(missionHash), si completada y !alreadyGranted add item + marcar granted, persistir en myjourney/mission_progress.dat, notificacion "You received: [item]" fade.
+
+- Idea 6 - Fuente diferente segun personaje
+  Arthur fuente caligrafica actual, John fuente legible/redondeada.
+  TODO: cargar segunda .ttf en init DX12/Vulkan (Fonts[2]), reutilizar atomic s_isJohn de Idea 1 (no existe actualmente, crear), en menu.cpp render texto elegir Fonts[1] (Arthur) o Fonts[2] (John), solo en lectura/escritura.
+
+- Idea 7 - Sistema de contenido custom (v1.5)
+  Carpeta myjourney/custom/ para contenido comunidad sin redistribuir .asi.
+  TODO: estructura myjourney/custom/diaries/ treasures/ letters/ npc_diaries/, schema JSON simple (treasure.json {coords, hint, reward} etc), ContentLoader::LoadAll() escaneando al iniciar sesion, parser ligero (nlohmann/json o manual), integrar con sistemas existentes (tesoros->waypoints, diarios->paginas, cartas->inventario), doc myjourney/custom/README.md con ejemplos.
+
+# Restricciones (ideas.md:88):
+# NO tocar render actual, hooks Vulkan/DX12, maquina estados Cover/Open, DrawDrawingCanvas/DrawReadPage/DrawWritePage/Render().
+# Reutilizar std::atomic para script->render, std::filesystem para I/O, codigo conciso.
+# Idea 2 ahora es prioritaria y debe implementarse aislada como sheets.cpp/h (patron CustomBooks).
