@@ -30,6 +30,31 @@ namespace WJConfig
 	inline constexpr const char* FB_Empty_Page    = "The pages are blank... (press W to write)";
 	inline constexpr const char* FB_Format_Title  = "Text Format";
 	inline constexpr const char* FB_Draw_Tools    = "Drawing Tools";
+	inline constexpr const char* FB_CB_NavHint         = "<- -> : Browse   |   K: Bookmark   |   ESC : Close";
+	inline constexpr const char* FB_CB_NavHintRandom   = "<- -> : Browse   |   K: Bookmark   |   R: Random Page   |   ESC : Close";
+	inline constexpr const char* FB_CB_SearchHint      = "Search: title, author, category...";
+	inline constexpr const char* FB_CB_NoBooks         = "No books found in MyJourney/Books/";
+	inline constexpr const char* FB_CB_NoMatch         = "No books match your search";
+	inline constexpr const char* FB_CB_OpenLabel       = "Open:";
+	inline constexpr const char* FB_CB_BookmarkPage    = "K: Bookmark (Page %d)";
+	inline constexpr const char* FB_CB_SetBookmarkFirst= "K: Set Bookmark First";
+	inline constexpr const char* FB_CB_OpenBeginning   = "Enter: From Beginning";
+	inline constexpr const char* FB_CB_OpenRandom      = "R: Random Page";
+	inline constexpr const char* FB_CB_BookNavHint     = "Arrows: Turn page   |   K: Bookmark   |   ESC: Close book";
+	inline constexpr const char* FB_CB_OpenBookLabel   = "Open Book:";
+	inline constexpr const char* FB_CB_OpenAtBookmark  = "K: Open at Bookmark (Page %d)";
+	inline constexpr const char* FB_CB_OpenFromStart   = "Enter: Open from Beginning";
+	inline constexpr const char* FB_CB_SatchelOpening  = "Opening Satchel...";
+	inline constexpr const char* FB_BookmarkSaved      = "Bookmark Saved";
+	inline constexpr const char* FB_BookmarkRemoved    = "Bookmark Removed";
+	inline constexpr const char* FB_Sheet_RipHint      = "P: Rip Page";
+	inline constexpr const char* FB_Sheet_RippingProgress = "Ripping page...";
+	inline constexpr const char* FB_Sheet_LeaveHint    = "L: Leave Page here";
+	inline constexpr const char* FB_Sheet_ReadHint     = "R: Read";
+	inline constexpr const char* FB_Sheet_RestoreHint  = "Add page back";
+	inline constexpr const char* FB_Sheet_CloseHint    = "Close";
+	inline constexpr const char* FB_Sheet_Nearby       = "There is a ripped page nearby";
+	inline constexpr const char* FB_Sheet_PressE       = "Press E to pick it up";
 
 	inline std::string Help_Cover;
 	inline std::string Help_Overview;
@@ -39,6 +64,31 @@ namespace WJConfig
 	inline std::string Empty_Page;
 	inline std::string Format_Title;
 	inline std::string Draw_Tools;
+	inline std::string CB_NavHint;
+	inline std::string CB_NavHintRandom;
+	inline std::string CB_SearchHint;
+	inline std::string CB_NoBooks;
+	inline std::string CB_NoMatch;
+	inline std::string CB_OpenLabel;
+	inline std::string CB_BookmarkPage;
+	inline std::string CB_SetBookmarkFirst;
+	inline std::string CB_OpenBeginning;
+	inline std::string CB_OpenRandom;
+	inline std::string CB_BookNavHint;
+	inline std::string CB_OpenBookLabel;
+	inline std::string CB_OpenAtBookmark;
+	inline std::string CB_OpenFromStart;
+	inline std::string CB_SatchelOpening;
+	inline std::string BookmarkSaved;
+	inline std::string BookmarkRemoved;
+	inline std::string Sheet_RipHint;
+	inline std::string RippingProgress;
+	inline std::string Sheet_LeaveHint;
+	inline std::string Sheet_ReadHint;
+	inline std::string Sheet_RestoreHint;
+	inline std::string Sheet_CloseHint;
+	inline std::string Sheet_Nearby;
+	inline std::string Sheet_PressE;
 
 	inline std::string GetModuleDir()
 	{
@@ -137,6 +187,32 @@ namespace WJConfig
 		loadStr("Empty_Page",    FB_Empty_Page,    Empty_Page);
 		loadStr("Format_Title",  FB_Format_Title,  Format_Title);
 		loadStr("Draw_Tools",    FB_Draw_Tools,    Draw_Tools);
+
+		loadStr("CB_NavHint",          FB_CB_NavHint,          CB_NavHint);
+		loadStr("CB_NavHintRandom",    FB_CB_NavHintRandom,    CB_NavHintRandom);
+		loadStr("CB_SearchHint",       FB_CB_SearchHint,       CB_SearchHint);
+		loadStr("CB_NoBooks",          FB_CB_NoBooks,          CB_NoBooks);
+		loadStr("CB_NoMatch",          FB_CB_NoMatch,          CB_NoMatch);
+		loadStr("CB_OpenLabel",        FB_CB_OpenLabel,        CB_OpenLabel);
+		loadStr("CB_BookmarkPage",     FB_CB_BookmarkPage,     CB_BookmarkPage);
+		loadStr("CB_SetBookmarkFirst", FB_CB_SetBookmarkFirst, CB_SetBookmarkFirst);
+		loadStr("CB_OpenBeginning",    FB_CB_OpenBeginning,    CB_OpenBeginning);
+		loadStr("CB_OpenRandom",       FB_CB_OpenRandom,       CB_OpenRandom);
+		loadStr("CB_BookNavHint",      FB_CB_BookNavHint,      CB_BookNavHint);
+		loadStr("CB_OpenBookLabel",    FB_CB_OpenBookLabel,    CB_OpenBookLabel);
+		loadStr("CB_OpenAtBookmark",   FB_CB_OpenAtBookmark,   CB_OpenAtBookmark);
+		loadStr("CB_OpenFromStart",    FB_CB_OpenFromStart,    CB_OpenFromStart);
+		loadStr("CB_SatchelOpening",   FB_CB_SatchelOpening,   CB_SatchelOpening);
+		loadStr("BookmarkSaved",       FB_BookmarkSaved,       BookmarkSaved);
+		loadStr("BookmarkRemoved",     FB_BookmarkRemoved,     BookmarkRemoved);
+		loadStr("Sheet_RipHint",       FB_Sheet_RipHint,       Sheet_RipHint);
+		loadStr("RippingProgress",     FB_Sheet_RippingProgress, RippingProgress);
+		loadStr("Sheet_LeaveHint",     FB_Sheet_LeaveHint,     Sheet_LeaveHint);
+		loadStr("Sheet_ReadHint",      FB_Sheet_ReadHint,      Sheet_ReadHint);
+		loadStr("Sheet_RestoreHint",   FB_Sheet_RestoreHint,   Sheet_RestoreHint);
+		loadStr("Sheet_CloseHint",     FB_Sheet_CloseHint,     Sheet_CloseHint);
+		loadStr("Sheet_Nearby",        FB_Sheet_Nearby,        Sheet_Nearby);
+		loadStr("Sheet_PressE",        FB_Sheet_PressE,        Sheet_PressE);
 
 		BlessingValid = ValidateBlessing();
 	}

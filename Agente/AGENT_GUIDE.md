@@ -131,6 +131,11 @@ cada uno posiblemente en su propio hilo. Reglas:
 3. **Integración mínima**: Checks de estado, no modificar lógica existente.
 4. **Commits ordenados**: Formato descriptivo, frecuencia después de cada feature/fix.
 5. **Testing**: Verificar que todo funciona antes de commitear.
+6. **CHANGELOG.md**: Después de cada compilación exitosa en el escritorio, ACTUALIZAR `CHANGELOG.md` con:
+   - Lista detallada de todos los cambios realizados (qué se modificó, valores antes/después)
+   - Lista de cosas a testear por el usuario (checklist con `[ ]` para que el usuario marque)
+   - Notas importantes si las hay (coordenadas, configuración, etc.)
+   - El changelog debe ser claro y específico para que el usuario sepa exactamente qué probar en el juego
 
 ## Gotchas conocidos
 - `WAIT()` (main.h) solo en el hilo de script; los yields fuera del bucle usan `WaitLocked()`.

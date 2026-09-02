@@ -1,23 +1,5 @@
 # Ideas para futuras versiones
 
-## 1. Texto dinámico según honor
-
-**Cómo funcionaría**: Cambiar el texto de la portada según el nivel de honor del jugador.
-- Honor alto con Arthur (>0): "Blessed are those who hunger and thirst for righteousness."
-- Honor bajo con Arthur (<0): "Blessed are those who mourn"
-
-CONDICIONAL SOLO CON JOHN MARSTON: 
-Si el jugador es John Marston, vamos a tomar lo ultimo de Arthur (solo revisar como quedo antes, si el de honor alto u honor bajo y luego visualmente tacharlo y abajo escribir)
-- "Blessed are the peacemakers"
-
-**TODO**:
-- [ ] Crear `std::atomic<int> s_playerHonor` en `menu.cpp`
-- [ ] Crear `std::atomic<bool> s_isJohn` en `menu.cpp`
-- [ ] En `script.cpp`, leer honor con native `PLAYER::_GET_HONOR()` cada frame
-- [ ] En `script.cpp`, detectar personaje con `PED::GET_ENTITY_MODEL(PLAYER::PLAYER_PED_ID())`
-- [ ] Pasar valores a `menu.cpp` via setters
-- [ ] En `menu.cpp` línea ~660, reemplazar texto hardcodeado con condicional según honor/personaje
-
 ---
 
 ## 2. Notas en el mapa
