@@ -1942,6 +1942,7 @@ namespace
 void CImGuiMenu::Render()
 {
 	CustomBooks::HandleInput();
+	Sheets::HandleInput();
 
 	if (CustomBooks::IsInventoryOpen() && !GetIsOpen())
 	{
@@ -1957,16 +1958,23 @@ void CImGuiMenu::Render()
 
 	CustomBooks::RenderPickupPrompt();
 
-	Sheets::HandleInput();
-	if (Sheets::IsShowingOverlay() || Sheets::IsAnimating())
+	bool worldSheetOverlay = Sheets::IsShowingOverlay() && Sheets::IsViewingDiscoverable() && !GetIsOpen();
+	if (worldSheetOverlay)
 	{
 		Sheets::Render();
 		return;
 	}
-	Sheets::Render();
-	Sheets::RenderPickupPrompt();
+
+	bool sheetsHasProgress = Sheets::IsRipping();
 
 	if (!GetIsOpen())
+	{
+		if (!Sheets::IsShowingOverlay() && !Sheets::IsAnimating())
+			Sheets::RenderPickupPrompt();
+		else if (sheetsHasProgress)
+			Sheets::Render();
+		return;
+	}
 		return;
 
 	// V: Apreciar la vista - no dibujar ImGui
@@ -1994,6 +2002,14 @@ void CImGuiMenu::Render()
 			if (s_selectedPage != 0)
 				GetPageBuffer(s_selectedPage); // recarga desde el nuevo capitulo
 		}
+	}
+
+	if (s_selectedPage != 0 && Sheets::IsPageRipped(s_selectedPage, true) && !Sheets::IsShowingOverlay() && !Sheets::IsAnimating() && !Sheets::IsRipping())
+	{
+		s_selectedPage = 0;
+		s_mode = ePageMode::Read;
+		s_zoomed = false;
+		s_zoomT = 0.f;
 	}
 
 	// TODO #3: en vista general, el mouse tambien puede enfocar una pagina
@@ -2050,17 +2066,22 @@ void CImGuiMenu::Render()
 
 		if (s_selectedPage == 0)
 		{
-			// TODO p2#1: vista general -> previsualizacion de contenido + resplandor
-			if (!Sheets::IsPageRipped(s_pagePair, true))
-				DrawPagePreview(g, s_pagePair, s_fadeIn);
-			if (!Sheets::IsPageRipped(s_pagePair + 1, true))
-				DrawPagePreview(g, s_pagePair + 1, s_fadeIn);
+			int leftPage = s_pagePair;
+			int rightPage = Sheets::GetNextVisiblePage(s_pagePair + 1);
+			if (rightPage == leftPage) rightPage = leftPage + 1;
+			if (!Sheets::IsPageRipped(leftPage, true))
+				DrawPagePreview(g, leftPage, s_fadeIn);
+			if (!Sheets::IsPageRipped(rightPage, true))
+				DrawPagePreview(g, rightPage, s_fadeIn);
+			else if (rightPage != s_pagePair + 1)
+				DrawPagePreview(g, rightPage, s_fadeIn);
 			DrawPageOverviewGlow(dl, g, s_fadeIn);
 		}
 		else if (!s_zoomed && s_zoomT <= 0.01f)
 		{
-			// Renderizar la pagina opuesta (compañera) como preview de solo lectura
-			const int companionPage = IsPageOnRight(s_selectedPage) ? s_selectedPage - 1 : s_selectedPage + 1;
+			int companionPage = IsPageOnRight(s_selectedPage) ? s_selectedPage - 1 : s_selectedPage + 1;
+			if (Sheets::IsPageRipped(companionPage, true))
+				companionPage = Sheets::GetNextVisiblePage(companionPage + (IsPageOnRight(s_selectedPage) ? -1 : 1));
 			if (!Sheets::IsPageRipped(companionPage, true))
 				DrawPagePreview(g, companionPage, s_fadeIn);
 
@@ -2139,6 +2160,17 @@ void CImGuiMenu::Render()
 			dl->AddText(bf, bf->FontSize * 1.4f, { ds.x * 0.5f - msgSz.x * 0.5f, gAnim.spreadMin.y - bf->FontSize * 3.f + 5.f },
 				FadeCol(IM_COL32(234, 223, 197, 255), s_fadeIn * textAlpha), bmMsg);
 		}
+	}
+
+	if (Sheets::IsShowingOverlay() || Sheets::IsAnimating())
+	{
+		Sheets::Render();
+		if (Sheets::IsShowingOverlay())
+			return;
+	}
+	if (Sheets::IsRipping())
+	{
+		Sheets::Render();
 	}
 
 	DrawHelp(dl, ds, s_fadeIn);
