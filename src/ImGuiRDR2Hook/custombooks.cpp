@@ -731,7 +731,6 @@ namespace CustomBooks
 		{
 			if (!s_filteredBooks.empty() && s_selectedBookIdx >= 0 && s_selectedBookIdx < (int)s_filteredBooks.size())
 			{
-				s_currentPage = 0; // Open from beginning
 				OpenBook(s_filteredBooks[s_selectedBookIdx]);
 			}
 		}
@@ -741,16 +740,33 @@ namespace CustomBooks
 			if (!s_filteredBooks.empty() && s_selectedBookIdx >= 0 && s_selectedBookIdx < (int)s_filteredBooks.size())
 			{
 				const std::string& bookName = s_filteredBooks[s_selectedBookIdx];
+				int bookmarkPage = 0;
 				auto bmIt = s_bookmarks.find(bookName);
 				if (bmIt != s_bookmarks.end() && bmIt->second >= 0)
 				{
-					s_currentPage = bmIt->second;
-				}
-				else
-				{
-					s_currentPage = 0;
+					bookmarkPage = bmIt->second;
 				}
 				OpenBook(bookName);
+				s_currentPage = bookmarkPage;
+				
+				LoadBook(bookName);
+				auto& book = s_loadedBooks[bookName];
+				if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
+				{
+					float bookW = ds.x * 0.6f;
+					float bookH = ds.y * 0.75f;
+					float margin = 30.f;
+					float pageTextH = bookH - margin * 2.f;
+					ImFont* f = io.Fonts->Fonts[1] ? io.Fonts->Fonts[1] : io.Fonts->Fonts[0];
+					float fontSize = f->FontSize + book.config.fontSizeOverride;
+					if (fontSize < 10.f) fontSize = 10.f;
+					float lineH = fontSize * 1.6f;
+					int linesPerPage = (int)(pageTextH / lineH);
+					if (linesPerPage < 1) linesPerPage = 1;
+					int targetLine = s_currentPage * linesPerPage * 2;
+					LoadChunk(book, targetLine);
+				}
+				
 				s_ribbonAnim.active = true;
 				s_ribbonAnim.progress = 0.f;
 				s_ribbonAnim.placing = true;
@@ -780,8 +796,15 @@ namespace CustomBooks
 				int linesPerPage = (int)((ds.y * 0.75f - margin * 2.f) / (fontSize * 1.6f));
 				if (linesPerPage < 1) linesPerPage = 1;
 				int totalPages = (int)wrapped.size() / linesPerPage + 1;
-				s_currentPage = rand() % totalPages;
+				int randomPage = rand() % totalPages;
 				OpenBook(bookName);
+				s_currentPage = randomPage;
+				
+				if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
+				{
+					int targetLine = s_currentPage * linesPerPage * 2;
+					LoadChunk(book, targetLine);
+				}
 			}
 		}
 
@@ -1067,7 +1090,11 @@ namespace CustomBooks
 		std::string hintStr = WJConfig::CB_BookNavHint;
 		if (s_cbSelectedPage >= 0)
 		{
-			hintStr += "   |   P: Rip Page   |   E: Edit   |   ESC: Deselect";
+			hintStr += "   |   ENTER: Selection Mode   |   P: Rip Page   |   E: Edit   |   ESC: Deselect";
+		}
+		else
+		{
+			hintStr += "   |   ENTER: Selection Mode";
 		}
 		ImVec2 hs = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, hintStr.c_str());
 		dl->AddText(f, f->FontSize, { ds.x * 0.5f - hs.x * 0.5f, ds.y * 0.93f }, IM_COL32(200, 200, 200, 200), hintStr.c_str());
@@ -1222,7 +1249,7 @@ namespace CustomBooks
 				{
 					TextEdit edit;
 					int startLine = s_cbSelectedPage * linesPerPage;
-					edit.lineIndex = book.lazyStartLine + startLine;
+					edit.lineIndex = startLine;
 					edit.startChar = 0;
 					edit.endChar = 10;
 					edit.originalText = "text";
@@ -1520,7 +1547,18 @@ namespace CustomBooks
 			if (s_selectedChapterIdx >= 0 && s_selectedChapterIdx < (int)book.chapters.size())
 			{
 				int targetLine = book.chapters[s_selectedChapterIdx].lineIndex;
-				int linesPerPage = 12;
+				
+				float bookW = ds.x * 0.6f;
+				float bookH = ds.y * 0.75f;
+				float margin = 30.f;
+				float pageTextH = bookH - margin * 2.f;
+				ImFont* f = io.Fonts->Fonts[1] ? io.Fonts->Fonts[1] : io.Fonts->Fonts[0];
+				float fontSize = f->FontSize + book.config.fontSizeOverride;
+				if (fontSize < 10.f) fontSize = 10.f;
+				float lineH = fontSize * 1.6f;
+				int linesPerPage = (int)(pageTextH / lineH);
+				if (linesPerPage < 1) linesPerPage = 1;
+				
 				s_currentPage = targetLine / (linesPerPage * 2);
 
 				if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
@@ -1672,11 +1710,18 @@ namespace CustomBooks
 
 	static void DrawPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float pulse)
 	{
-		const int alpha = (int)(130.f + 60.f * pulse);
-		const ImU32 glow = IM_COL32(0, 180, 255, std::clamp(alpha, 0, 255));
-		dl->AddRect({ mn.x - 3.f, mn.y - 3.f }, { mx.x + 3.f, mx.y + 3.f }, glow, 4.f, 0, 3.f);
-		dl->AddRect({ mn.x - 7.f, mn.y - 7.f }, { mx.x + 7.f, mx.y + 7.f },
-		            IM_COL32(0, 180, 255, (int)((130.f + 60.f * pulse) * 0.4f)), 5.f, 0, 1.5f);
+		const int alpha1 = (int)(180.f + 75.f * pulse);
+		const int alpha2 = (int)(140.f + 60.f * pulse);
+		const int alpha3 = (int)(100.f + 50.f * pulse);
+		
+		dl->AddRectFilled({ mn.x - 12.f, mn.y - 12.f }, { mx.x + 12.f, mx.y + 12.f },
+		                  IM_COL32(0, 150, 255, std::clamp(alpha3, 0, 255)), 6.f);
+		dl->AddRectFilled({ mn.x - 8.f, mn.y - 8.f }, { mx.x + 8.f, mx.y + 8.f },
+		                  IM_COL32(0, 180, 255, std::clamp(alpha2, 0, 255)), 5.f);
+		dl->AddRect({ mn.x - 4.f, mn.y - 4.f }, { mx.x + 4.f, mx.y + 4.f },
+		            IM_COL32(50, 200, 255, std::clamp(alpha1, 0, 255)), 4.f, 0, 4.f);
+		dl->AddRect({ mn.x - 1.f, mn.y - 1.f }, { mx.x + 1.f, mx.y + 1.f },
+		            IM_COL32(100, 220, 255, std::clamp(alpha1, 0, 255)), 3.f, 0, 2.5f);
 	}
 
 	static void DrawRippedPageSlot(ImDrawList* dl, ImVec2 pgMin, ImVec2 pgMax, bool isLeft)

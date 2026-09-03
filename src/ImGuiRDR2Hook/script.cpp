@@ -402,8 +402,8 @@ void main()
 			s_reloadHolding = false;
 		}
 
-		// Bloqueo de controles para satchel/libros del mod (independiente del journal)
-		if (CustomBooks::IsInventoryOpen() || CustomBooks::IsBookOpen())
+		// Bloqueo de controles para satchel/libros/index del mod (independiente del journal)
+		if (CustomBooks::IsInventoryOpen() || CustomBooks::IsBookOpen() || CustomBooks::IsIndexOpen())
 		{
 			LockControlsThisFrame();
 
@@ -411,6 +411,7 @@ void main()
 			{
 				CustomBooks::CloseInventory();
 				CustomBooks::CloseBook();
+				CustomBooks::CloseIndex();
 				WAIT(0);
 				continue;
 			}
@@ -510,17 +511,17 @@ void main()
 
 			if (Sheets::IsNearPickup())
 			{
-				bool eDown = (SafeGetAsyncKeyState('E') & 0x8000) != 0;
-				bool eJustPressed = (SafeGetAsyncKeyState('E') & 0x0001) != 0;
+				bool rDown = (SafeGetAsyncKeyState('R') & 0x8000) != 0;
+				bool rJustPressed = (SafeGetAsyncKeyState('R') & 0x0001) != 0;
 
-				if (eJustPressed && !Sheets::IsEHoldActive())
+				if (rJustPressed && !Sheets::IsEHoldActive())
 				{
 					Sheets::StartEHold();
 				}
 
 				if (Sheets::IsEHoldActive())
 				{
-					if (!eDown)
+					if (!rDown)
 					{
 						Sheets::CancelEHold();
 					}

@@ -54,7 +54,7 @@ namespace WJConfig
 	inline constexpr const char* FB_Sheet_RestoreHint  = "Add page back";
 	inline constexpr const char* FB_Sheet_CloseHint    = "Close";
 	inline constexpr const char* FB_Sheet_Nearby       = "There is a ripped page nearby";
-	inline constexpr const char* FB_Sheet_PressE       = "Press E to pick it up";
+	inline constexpr const char* FB_Sheet_PressE       = "Press R to pick it up";
 	inline constexpr const char* FB_Sheet_RippedChapter = "Ripped Sheet";
 	inline constexpr const char* FB_Sheet_PageRipped = "Page Ripped";
 	inline constexpr const char* FB_Sheet_KeepSheet = "K: Keep the Sheet";

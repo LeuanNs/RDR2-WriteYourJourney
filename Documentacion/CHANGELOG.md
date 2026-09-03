@@ -1,5 +1,109 @@
 # Changelog - Write Your Journey
 
+## [Build - Testing Fixes Batch 2] - 2026-09-02
+
+### Fixes based on Testing.md feedback (Batch 2)
+
+**Fix 1: Pickup con R key (antes E)**
+- Cambiado todas las referencias de 'E' a 'R' en script.cpp para sheet pickup
+- Cambiado icono de tecla de "E" a "R" en sheets.cpp RenderPickupPrompt() y RenderEHoldPrompt()
+- Cambiado HandleInput() en sheets.cpp para usar 'R' en vez de 'E'
+- Cambiado texto default en config.h de "Press E to pick it up" a "Press R to pick it up"
+- Motivo: La tecla E ya no funcionaba, se reasigno a R
+
+**Fix 2: Index bug - controles desbloqueados, ImGui no respondia**
+- Añadido CustomBooks::IsIndexOpen() al check de bloqueo de controles en script.cpp
+- Añadido CustomBooks::CloseIndex() al cleanup cuando el juego pierde foco
+- Ahora el Index mantiene el bloqueo de controles como el inventory y book
+- Motivo: Al abrir Index, el personaje recuperaba control, ImGui dejaba de responder, ESC no funcionaba
+
+**Fix 3: Strikethrough bug - aplicaba a pagina siguiente**
+- Corregido edit.lineIndex en custombooks.cpp de `book.lazyStartLine + startLine` a solo `startLine`
+- El calculo de actualLineIdx en el render ya compensa por lazyStartLine, no hay que duplicar el offset
+- Motivo: Al rippear pagina con tachado, el tachado se aplicaba a pagina siguiente
+
+**Fix 4: Lazy loading - paginas lejanas en blanco / random iba a pag 1-2**
+- Fix random page (R): s_currentPage ahora se setea DESPUES de OpenBook() (que lo reseteaba a 0)
+- Fix bookmark (K): s_currentPage se setea DESPUES de OpenBook() y se carga el chunk correcto
+- Fix Index: calculo de linesPerPage ahora usa la misma formula que RenderBook() en vez de hardcodear 12
+- Añadida carga de chunk despues de setear s_currentPage en random y bookmark
+- Motivo: Al abrir pagina aleatoria o capitulo lejano via Index, todo salia en blanco
+
+**Fix 5: Texto "ENTER: Selection Mode" faltante**
+- Añadido "ENTER: Selection Mode" al help string en custombooks.cpp RenderBook()
+- Se muestra tanto cuando hay pagina seleccionada como cuando no
+- Motivo: Falta indicacion visual de como entrar en modo seleccion
+
+**Fix 6: Ripped pages visual en custombook - nada visual**
+- Añadido CustomBooks::RipPage() en sheets.cpp ConfirmRip() para sincronizar tracking
+- Añadido CustomBooks::RestorePage() en sheets.cpp RestorePage() para sincronizar tracking
+- Ahora s_rippedCustomBookPages en custombooks.cpp se actualiza correctamente
+- Motivo: Paginas ripeadas en custombook no mostraban borde rasgado ni "Page Ripped"
+
+**Fix 7: Ripped page glow - muy tenue, no marcaba bien la forma**
+- Mejorado DrawPageGlow() en custombooks.cpp y menu.cpp
+- Añadidas 4 capas de glow en vez de 2 (2 rellenos + 2 bordes)
+- Aumentado alpha de 130-190 a 180-255 para glow mas visible
+- Añadidos rectangulos rellenos para efecto de glow mas solido
+- Motivo: El glow no era suficiente para dar pista visual de pagina faltante
+
+**Fix 8: Rip progress bar - muy gruesa y brillante**
+- Reducido tamaño de 320x12 a 280x8
+- Reducido texto de 1.3x a 1.1x font size
+- Cambiado colores de (255,200,80) a (200,170,90) para tonos mas sutiles
+- Reducido border thickness de 2.5f a 1.5f
+- Reducido padding y roundness
+- Motivo: Los colores eran muy fuertes, parecia "de niño"
+
+**Fix 9: Night tint - muy claro, deslumbraba de noche**
+- Cambiado de (80,70,55,180) a (50,45,35,200)
+- RGB mas bajo para oscuridad aumentada
+- Alpha ligeramente mayor para mejor cobertura
+- Motivo: Tinte nocturno no era lo suficientemente oscuro
+
+### Archivos modificados
+- `src/ImGuiRDR2Hook/script.cpp` - Pickup con R, Index control lock
+- `src/ImGuiRDR2Hook/sheets.cpp` - Pickup con R, progress bar toned down, sincronizacion con custombooks
+- `src/ImGuiRDR2Hook/custombooks.cpp` - Index fix, lazy loading fix, strikethrough fix, glow mejorado, texto selection mode
+- `src/ImGuiRDR2Hook/menu.cpp` - Glow mejorado, night tint mas oscuro
+- `src/ImGuiRDR2Hook/config.h` - Texto default "Press R to pick it up"
+- `Testing.md` - Actualizado con fixes de Batch 2
+
+### Checklist de Testing
+
+#### Sheets - Pickup con R (CAMBIADO de E)
+- [ ] Mantener R -> barra blanca se llena alrededor del cuadrado (3s)
+- [ ] Soltar R antes de 3s -> se cancela correctamente
+- [ ] Moverse mientras se mantiene R -> se cancela
+- [ ] Moverse mientras personaje camina -> se cancela
+- [ ] Al llegar -> personaje se agacha (crouch)
+- [ ] Al completar hold + K Keep -> hoja se añade de vuelta
+
+#### Sheets - Visual mejorado
+- [ ] Paginas ripeadas -> glow pulsante azul MAS FUERTE (4 capas)
+- [ ] Barra "Ripping page..." -> menos gruesa (280x8) y colores mas sutiles
+
+#### CustomBooks - Index fix
+- [ ] Abrir Index -> ImGui sigue respondiendo, controles bloqueados, ESC funciona
+- [ ] Abrir capitulo lejano -> lazy loading carga chunk correcto
+- [ ] Abrir con bookmark (K) -> abre en pagina del bookmark
+- [ ] Abrir random (R) -> abre en pagina aleatoria
+
+#### CustomBooks - Edicion y rip
+- [ ] Click en pagina -> texto "ENTER: Selection Mode" visible
+- [ ] Escribir texto + ENTER -> tachado se aplica a pagina correcta (no siguiente)
+- [ ] Paginas ripeadas -> borde rasgado + "Page Ripped" visible
+
+#### Journal - Colores
+- [ ] De noche (21:00-06:00) -> tinte nocturno mas oscuro (50,45,35)
+
+#### Lazy Loading
+- [ ] Abrir Biblia NT 1858 -> navegar adelante sin cortes
+- [ ] Llegar a pag 58+ -> texto sigue renderizando
+- [ ] Abrir en pagina aleatoria (R) -> lazy loading funciona
+
+---
+
 ## [Build - Testing Fixes Batch 1] - 2026-09-02
 
 ### Fixes based on Testing.md feedback
