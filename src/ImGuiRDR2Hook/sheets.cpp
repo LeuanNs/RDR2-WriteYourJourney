@@ -94,6 +94,11 @@ namespace Sheets
 		return fs::path(WJConfig::GetModuleDir()) / "myjourney" / "ripped_pages.ini";
 	}
 
+	static fs::path GetRestoredPagesPath()
+	{
+		return fs::path(WJConfig::GetModuleDir()) / "myjourney" / "restored_pages.ini";
+	}
+
 	static std::string Trim(const std::string& s)
 	{
 		size_t a = s.find_first_not_of(" \t\r\n");
@@ -205,6 +210,54 @@ namespace Sheets
 		}
 	}
 
+	static void SaveRestoredPagesIndex()
+	{
+		std::ofstream out(GetRestoredPagesPath());
+		if (!out) return;
+		out << "[Journal]\n";
+		for (int p : s_restoredJournalPages)
+			out << "Page=" << p << "\n";
+		for (const auto& [bookName, pages] : s_restoredCustomPages)
+		{
+			out << "\n[Custom:" << bookName << "]\n";
+			for (int p : pages)
+				out << "Page=" << p << "\n";
+		}
+	}
+
+	static void LoadRestoredPagesIndex()
+	{
+		s_restoredJournalPages.clear();
+		s_restoredCustomPages.clear();
+		std::ifstream in(GetRestoredPagesPath());
+		if (!in) return;
+		std::string line;
+		std::string currentBook;
+		bool inJournal = false;
+		while (std::getline(in, line))
+		{
+			line = Trim(line);
+			if (line.empty()) continue;
+			if (line == "[Journal]") { inJournal = true; currentBook.clear(); continue; }
+			if (line.substr(0, 8) == "[Custom:")
+			{
+				inJournal = false;
+				size_t end = line.find(']', 8);
+				if (end != std::string::npos)
+					currentBook = line.substr(8, end - 8);
+				continue;
+			}
+			if (line.substr(0, 5) == "Page=")
+			{
+				int pg = std::atoi(line.substr(5).c_str());
+				if (inJournal)
+					s_restoredJournalPages.insert(pg);
+				else if (!currentBook.empty())
+					s_restoredCustomPages[currentBook].insert(pg);
+			}
+		}
+	}
+
 	static void ParseLocationIni(const fs::path& path, DiscoverableSheet& sheet)
 	{
 		std::ifstream f(path);
@@ -312,6 +365,7 @@ namespace Sheets
 	{
 		if (!WJConfig::RipSheetsEnabled) return;
 		LoadRippedPagesIndex();
+		LoadRestoredPagesIndex();
 		ScanSheets();
 	}
 
@@ -590,6 +644,7 @@ namespace Sheets
 		}
 
 		SaveRippedPagesIndex();
+		SaveRestoredPagesIndex();
 		
 		s_restoreCache = s_overlayCache;
 		s_restoreAnimating = true;
@@ -644,15 +699,31 @@ namespace Sheets
 						int partner = GetPartnerPage(sheet.originalPage);
 						if (sheet.fromJournal)
 						{
+							// Remove from ripped pages (so it's no longer marked as ripped)
+							s_rippedJournalPages.erase(sheet.originalPage);
+							if (partner > 0) s_rippedJournalPages.erase(partner);
+							// Add to restored pages (so it shows damaged visual)
 							s_restoredJournalPages.insert(sheet.originalPage);
 							if (partner > 0) s_restoredJournalPages.insert(partner);
 						}
 						else if (!sheet.bookName.empty())
 						{
+							// Remove from ripped pages
+							auto it = s_rippedCustomPages.find(sheet.bookName);
+							if (it != s_rippedCustomPages.end())
+							{
+								it->second.erase(sheet.originalPage);
+								if (partner > 0) it->second.erase(partner);
+							}
+							// Add to restored pages
 							s_restoredCustomPages[sheet.bookName].insert(sheet.originalPage);
 							if (partner > 0) s_restoredCustomPages[sheet.bookName].insert(partner);
 							CustomBooks::RestorePage(sheet.bookName, sheet.originalPage);
 						}
+						// Save the updated ripped pages index
+						SaveRippedPagesIndex();
+						// Save the updated restored pages index
+						SaveRestoredPagesIndex();
 					}
 					break;
 				}
