@@ -460,15 +460,17 @@ void main()
 				TASK::CLEAR_PED_TASKS(ped, TRUE, FALSE);
 				try {
 					Sheets::StartCrouch();
-					if (STREAMING::HAS_ANIM_DICT_LOADED("amb_rest@world_human_bottle_pickup@male_a@base") == FALSE)
+					const char* animDict = "amb_rest@world_human_bottle_pickup@male_a@base";
+					const char* animName = "base";
+					if (STREAMING::HAS_ANIM_DICT_LOADED(animDict) == FALSE)
 					{
-						STREAMING::REQUEST_ANIM_DICT("amb_rest@world_human_bottle_pickup@male_a@base");
+						STREAMING::REQUEST_ANIM_DICT(animDict);
 						BUILTIN::SETTIMERA(0);
-						while (STREAMING::HAS_ANIM_DICT_LOADED("amb_rest@world_human_bottle_pickup@male_a@base") == FALSE && BUILTIN::TIMERA() < 1500)
+						while (STREAMING::HAS_ANIM_DICT_LOADED(animDict) == FALSE && BUILTIN::TIMERA() < 3000)
 							WAIT(0);
 					}
-					if (STREAMING::HAS_ANIM_DICT_LOADED("amb_rest@world_human_bottle_pickup@male_a@base"))
-						TASK::TASK_PLAY_ANIM(ped, "amb_rest@world_human_bottle_pickup@male_a@base", "base", 2.0f, -2.0f, 1500, AF_HOLD_LAST_FRAME, 0.0f, FALSE, 0, FALSE, nullptr, FALSE);
+					if (STREAMING::HAS_ANIM_DICT_LOADED(animDict))
+						TASK::TASK_PLAY_ANIM(ped, animDict, animName, 8.0f, -8.0f, 1500, AF_HOLD_LAST_FRAME, 0.0f, FALSE, 0, FALSE, nullptr, FALSE);
 
 					while (!Sheets::UpdateCrouch())
 					{
@@ -553,6 +555,30 @@ void main()
 			Sheets::SetPlayerCoords(pos.x, pos.y, pos.z);
 			if (Sheets::UpdateWalk(pos.x, pos.y, pos.z))
 			{
+				TASK::CLEAR_PED_TASKS(ped, TRUE, FALSE);
+				try {
+					Sheets::StartCrouch();
+					const char* animDict = "amb_rest@world_human_bottle_pickup@male_a@base";
+					const char* animName = "base";
+					if (STREAMING::HAS_ANIM_DICT_LOADED(animDict) == FALSE)
+					{
+						STREAMING::REQUEST_ANIM_DICT(animDict);
+						BUILTIN::SETTIMERA(0);
+						while (STREAMING::HAS_ANIM_DICT_LOADED(animDict) == FALSE && BUILTIN::TIMERA() < 3000)
+							WAIT(0);
+					}
+					if (STREAMING::HAS_ANIM_DICT_LOADED(animDict))
+						TASK::TASK_PLAY_ANIM(ped, animDict, animName, 8.0f, -8.0f, 1500, AF_HOLD_LAST_FRAME, 0.0f, FALSE, 0, FALSE, nullptr, FALSE);
+
+					while (!Sheets::UpdateCrouch())
+					{
+						WAIT(0);
+					}
+
+					TASK::CLEAR_PED_TASKS(ped, TRUE, FALSE);
+				} catch (...) {
+					TASK::CLEAR_PED_TASKS(ped, TRUE, FALSE);
+				}
 				Sheets::TryPickupSheet();
 			}
 		}

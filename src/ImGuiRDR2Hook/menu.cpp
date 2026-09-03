@@ -552,7 +552,7 @@ namespace
 	{
 		if (!IsNightHour(s_worldHour.load()))
 			return FadeCol(IM_COL32(100, 90, 75, 100), A);
-		return FadeCol(IM_COL32(85, 77, 64, 100), A);
+		return FadeCol(IM_COL32(93, 84, 70, 100), A);
 	}
 
 	void DrawRuledLines(ImDrawList* dl, const BookGeom& g,
@@ -686,6 +686,8 @@ namespace
 		float jagSize = 8.f;
 		float step = 8.f;
 
+		dl->PushClipRect(pgMin, pgMax, true);
+
 		dl->AddRectFilled(pgMin, pgMax, FadeCol(IM_COL32(80, 75, 70, 200), A));
 
 		std::vector<ImVec2> tornEdge;
@@ -737,6 +739,8 @@ namespace
 				dl->AddText(df, qSize, { jx, jy }, FadeCol(IM_COL32(140, 135, 125, 100), A), "?");
 			}
 		}
+
+		dl->PopClipRect();
 	}
 
 	void DrawOpenBook(ImDrawList* dl, const ImVec2 ds, float A)
@@ -1063,9 +1067,9 @@ namespace
 		float t = (damageCount - 1) / 4.f;
 		if (t < 0.f) t = 0.f;
 		if (t > 1.f) t = 1.f;
-		int r = (int)(192.f + t * (160.f - 192.f));
-		int g = (int)(183.f + t * (150.f - 183.f));
-		int b = (int)(160.f + t * (130.f - 160.f));
+		int r = (int)(200.f + t * (170.f - 200.f));
+		int g = (int)(190.f + t * (160.f - 190.f));
+		int b = (int)(167.f + t * (140.f - 167.f));
 		dl->AddRectFilled(mn, mx, FadeCol(IM_COL32(r, g, b, 255), A));
 	}
 
@@ -1080,33 +1084,46 @@ namespace
 			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
 		};
 
+		dl->PushClipRect(mn, mx, true);
+
 		int wrinkleAlpha = (int)(60.f + intensity * 120.f);
 		int stainAlpha = (int)(40.f + intensity * 100.f);
 		int tearAlpha = (int)(80.f + intensity * 140.f);
 
+		float pageW = mx.x - mn.x;
+		float pageH = mx.y - mn.y;
+
 		for (int i = 0; i < 14; ++i)
 		{
-			float y1 = mn.y + (mx.y - mn.y) * rng(seed);
+			float y1 = mn.y + pageH * rng(seed);
 			float y2 = y1 + (rng(seed) - 0.5f) * 30.f;
-			float x1 = mn.x + rng(seed) * (mx.x - mn.x) * 0.2f;
-			float x2 = x1 + (mx.x - mn.x) * (0.5f + rng(seed) * 0.5f);
+			float x1 = mn.x + pageW * 0.2f * rng(seed);
+			float x2 = x1 + pageW * (0.5f + rng(seed) * 0.5f);
+			y1 = std::max(mn.y, std::min(mx.y, y1));
+			y2 = std::max(mn.y, std::min(mx.y, y2));
+			x1 = std::max(mn.x, std::min(mx.x, x1));
+			x2 = std::max(mn.x, std::min(mx.x, x2));
 			dl->AddLine({ x1, y1 }, { x2, y2 }, FadeCol(IM_COL32(140, 130, 110, wrinkleAlpha), A), 1.5f);
 		}
 
 		for (int i = 0; i < 8; ++i)
 		{
-			float cx = mn.x + rng(seed) * (mx.x - mn.x);
-			float cy = mn.y + rng(seed) * (mx.y - mn.y);
+			float cx = mn.x + pageW * rng(seed);
+			float cy = mn.y + pageH * rng(seed);
 			float r = 4.f + rng(seed) * 12.f;
 			dl->AddCircleFilled({ cx, cy }, r, FadeCol(IM_COL32(130, 120, 100, stainAlpha), A), 8);
 		}
 
 		for (int i = 0; i < 5; ++i)
 		{
-			float x1 = mn.x + rng(seed) * (mx.x - mn.x);
-			float y1 = mn.y + rng(seed) * (mx.y - mn.y);
+			float x1 = mn.x + pageW * rng(seed);
+			float y1 = mn.y + pageH * rng(seed);
 			float x2 = x1 + (rng(seed) - 0.5f) * 40.f;
 			float y2 = y1 + (rng(seed) - 0.5f) * 40.f;
+			x1 = std::max(mn.x, std::min(mx.x, x1));
+			y1 = std::max(mn.y, std::min(mx.y, y1));
+			x2 = std::max(mn.x, std::min(mx.x, x2));
+			y2 = std::max(mn.y, std::min(mx.y, y2));
 			dl->AddLine({ x1, y1 }, { x2, y2 }, FadeCol(IM_COL32(120, 110, 90, stainAlpha), A), 1.f);
 		}
 
@@ -1118,7 +1135,7 @@ namespace
 			for (float x = mx.x; x > mx.x - tearSize * 3.f; x -= 2.5f)
 			{
 				float jy = mn.y + (rng(seed) - 0.3f) * tearSize * 1.5f;
-				topTear.push_back({ x, jy });
+				topTear.push_back({ x, std::max(mn.y, std::min(mx.y, jy)) });
 			}
 			topTear.push_back({ mx.x - tearSize * 3.f, mn.y });
 		}
@@ -1128,7 +1145,7 @@ namespace
 			for (float x = mn.x; x < mn.x + tearSize * 3.f; x += 2.5f)
 			{
 				float jy = mn.y + (rng(seed) - 0.3f) * tearSize * 1.5f;
-				topTear.push_back({ x, jy });
+				topTear.push_back({ x, std::max(mn.y, std::min(mx.y, jy)) });
 			}
 			topTear.push_back({ mn.x + tearSize * 3.f, mn.y });
 		}
@@ -1142,7 +1159,7 @@ namespace
 			for (float x = mx.x; x > mx.x - tearSize * 2.5f; x -= 2.5f)
 			{
 				float jy = mx.y - (rng(seed) - 0.3f) * tearSize * 1.5f;
-				bottomTear.push_back({ x, jy });
+				bottomTear.push_back({ x, std::max(mn.y, std::min(mx.y, jy)) });
 			}
 			bottomTear.push_back({ mx.x - tearSize * 2.5f, mx.y });
 		}
@@ -1152,7 +1169,7 @@ namespace
 			for (float x = mn.x; x < mn.x + tearSize * 2.5f; x += 2.5f)
 			{
 				float jy = mx.y - (rng(seed) - 0.3f) * tearSize * 1.5f;
-				bottomTear.push_back({ x, jy });
+				bottomTear.push_back({ x, std::max(mn.y, std::min(mx.y, jy)) });
 			}
 			bottomTear.push_back({ mn.x + tearSize * 2.5f, mx.y });
 		}
@@ -1162,20 +1179,39 @@ namespace
 		for (int i = 0; i < 6; ++i)
 		{
 			float sx = isLeft ? (mx.x - 3.f - rng(seed) * 20.f) : (mn.x + 3.f + rng(seed) * 20.f);
-			float sy = mn.y + (mx.y - mn.y) * (0.1f + rng(seed) * 0.8f);
+			float sy = mn.y + pageH * (0.1f + rng(seed) * 0.8f);
 			float sLen = 8.f + rng(seed) * 16.f;
 			float sAngle = (rng(seed) - 0.5f) * 0.7f;
-			dl->AddLine({ sx, sy }, { sx + std::cos(sAngle) * sLen, sy + std::sin(sAngle) * sLen },
-			            FadeCol(IM_COL32(100, 90, 70, 180), A), 2.f);
+			float ex = sx + std::cos(sAngle) * sLen;
+			float ey = sy + std::sin(sAngle) * sLen;
+			sx = std::max(mn.x, std::min(mx.x, sx));
+			sy = std::max(mn.y, std::min(mx.y, sy));
+			ex = std::max(mn.x, std::min(mx.x, ex));
+			ey = std::max(mn.y, std::min(mx.y, ey));
+			dl->AddLine({ sx, sy }, { ex, ey }, FadeCol(IM_COL32(100, 90, 70, 180), A), 2.f);
 		}
 
 		for (int i = 0; i < 4; ++i)
 		{
-			float cx = mn.x + (mx.x - mn.x) * (0.1f + rng(seed) * 0.8f);
-			float cy = mn.y + (mx.y - mn.y) * (0.1f + rng(seed) * 0.8f);
+			float cx = mn.x + pageW * (0.1f + rng(seed) * 0.8f);
+			float cy = mn.y + pageH * (0.1f + rng(seed) * 0.8f);
 			float r = 5.f + rng(seed) * 12.f;
 			dl->AddCircleFilled({ cx, cy }, r, FadeCol(IM_COL32(150, 140, 115, 70), A), 12);
 		}
+
+		if (damageCount >= 5)
+		{
+			for (int i = 0; i < 3; ++i)
+			{
+				float cx = mn.x + pageW * (0.2f + rng(seed) * 0.6f);
+				float cy = mn.y + pageH * (0.2f + rng(seed) * 0.6f);
+				float chunkW = 8.f + rng(seed) * 12.f;
+				float chunkH = 6.f + rng(seed) * 10.f;
+				dl->AddRectFilled({ cx - chunkW * 0.5f, cy - chunkH * 0.5f }, { cx + chunkW * 0.5f, cy + chunkH * 0.5f }, FadeCol(IM_COL32(40, 35, 30, 180), A), 2.f);
+			}
+		}
+
+		dl->PopClipRect();
 	}
 
 	void DrawPageOverviewGlow(ImDrawList* dl, const BookGeom& g, float A)
@@ -2260,8 +2296,8 @@ void CImGuiMenu::Render()
 
 	HandleInput();
 
-	// Disable mouse when in Read mode with page selected (keyboard navigation only)
-	if (s_state == eUiState::Open && s_selectedPage != 0 && s_mode == ePageMode::Read && !s_zoomed)
+	// Disable mouse when journal is open (overview or read mode with page selected)
+	if (s_state == eUiState::Open && !s_zoomed)
 	{
 		SetShouldDrawMouse(false);
 	}

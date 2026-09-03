@@ -1,5 +1,92 @@
 # Changelog - Write Your Journey
 
+## [Build - Batch 9: Overlay Text Fix + Visual Improvements + Crouch Animation] - 2026-09-03
+
+### Fix: Custombook overlay no mostraba texto al rippear paginas lejanas
+
+**Problema:** Al rippear una pagina lejana (ej: pagina 1095) de un custombook con lazy loading, el overlay de hoja arrancada aparecia pero sin contenido de texto.
+
+**Causa:** El calculo de `startLine` no consideraba el offset de lazy loading (`book.lazyStartLine`). Para pagina 1095, `startLine = 1095 * linesPerPage = ~13140`, pero `wrappedLines` solo contenia las lineas del chunk cargado (unas pocas cientos).
+
+**Solucion:** Ajustado el calculo de `startLine` para restar `book.lazyStartLine` y agregar bounds checking.
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/custombooks.cpp` - Fix en P key handler con lazyStartLine offset
+
+### Fix: Journal ripped slot sin relleno gris ni signos ?
+
+**Problema:** El slot de pagina ripped en el journal no mostraba el relleno gris oscuro ni los signos "?" que si aparecian en custombooks.
+
+**Solucion:** Agregado `PushClipRect`/`PopClipRect` en `DrawRippedPageSlot` de menu.cpp para asegurar que las lineas diagonales y signos "?" se dibujen correctamente dentro de los limites de la pagina.
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/menu.cpp` - PushClipRect en DrawRippedPageSlot
+- `src/ImGuiRDR2Hook/custombooks.cpp` - PushClipRect en DrawRippedPageSlot
+
+### Fix: Mouse cursor visible en overview del journal
+
+**Problema:** El cursor del mouse permanecia visible en la vista general del journal (overview con navegacion por flechas), cuando deberia ocultarse.
+
+**Solucion:** Simplificada la condicion de `SetShouldDrawMouse(false)` para ocultar el mouse siempre que el journal esta abierto (sin importar si hay pagina seleccionada o no).
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/menu.cpp` - Condicion simplificada en Render()
+
+### Fix: Animacion de crouch no se ejecutaba al recoger sheets
+
+**Problema:** Al llegar a una sheet del mundo, el personaje nunca se agachaba (crouch animation).
+
+**Causa:** La animacion tenia velocidad muy baja (2.0f) y timeout corto (1500ms). Ademas, el caso con journal abierto no tenia la animacion de crouch.
+
+**Solucion:**
+- Aumentada velocidad de animacion de 2.0f a 8.0f
+- Aumentado timeout de carga de 1500ms a 3000ms
+- Agregada animacion de crouch en el caso con journal abierto (segundo UpdateWalk)
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/script.cpp` - Ambas llamadas a UpdateWalk ahora tienen crouch animation
+
+### Ajuste: Efecto restaurado mas claro (~5% mas oscuro)
+
+**Cambio:** Color de DrawRestoredPage ajustado de (192,183,160) a (200,190,167) para damageCount=1.
+- Ahora es ~5% mas oscuro que pagina normal (210,200,175) en vez de ~15%
+- Progresion de daño ajustada: (200→170, 190→160, 167→140)
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/menu.cpp` - DrawRestoredPage
+- `src/ImGuiRDR2Hook/custombooks.cpp` - DrawRestoredPage
+
+### Ajuste: Tinte nocturno reducido a 7%
+
+**Cambio:** Tinte nocturno ajustado de (85,77,64) a (93,84,70).
+- Ahora es ~7% menos brillante que el dia (100,90,75) en vez de ~15%
+- Diferencia mas sutil entre dia y noche
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/menu.cpp` - PageAmbientTint
+
+### Mejora: Damage level 5 con trozos faltantes y clipping
+
+**Cambio 1:** Agregados pequenos trozos de hoja faltante (3 rectangulos oscuros) cuando damageCount >= 5.
+- Simula pedazos perdidos de la hoja
+- Tamano pequeno (8-20px ancho, 6-16px alto)
+- Posicionados aleatoriamente dentro de la pagina
+
+**Cambio 2:** Agregado clipping estricto para todas las marcas de dano.
+- PushClipRect al inicio de DrawRestoredPageDamageOverlay
+- Todas las coordenadas clampadas a los limites de la pagina
+- Lineas, manchas, tajos y trozos nunca se salen del marco de la hoja
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/menu.cpp` - DrawRestoredPageDamageOverlay con clipping y trozos
+- `src/ImGuiRDR2Hook/custombooks.cpp` - DrawRestoredPageDamageOverlay con clipping y trozos
+
+### Build output
+- `WriteYourJourney.asi` compilado exitosamente en `C:\Users\evanm\Desktop\`
+- 0 errores, 3 advertencias pre-existentes
+
+---
+
 ## [Build - Batch 8: Physical Page Model + Visual Overhaul + Cumulative Damage] - 2026-09-03
 
 ### Correccion modelo fisico de hoja (partner para custombooks)
