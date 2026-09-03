@@ -1,5 +1,55 @@
 # Changelog - Write Your Journey
 
+## [Build - Testing Fixes Batch 6] - 2026-09-03
+
+### Fixes based on testing feedback (Batch 6)
+
+**Fix 1: R key no se detectaba para pickup de sheets**
+- Causa raiz: `GetAsyncKeyState('R')` se llamaba al inicio del loop para el reload (R+P), consumiendo el bit `0x0001` (just-pressed). Cuando despues se verificaba `keyJustPressed` para el pickup, ya era 0.
+- Solucion: Reemplazado `0x0001` por un tracker manual de estado (`s_pickupKeyWasDown`). Ahora se detecta la transicion de no-pressionado a presionado correctamente, sin importar cuantas veces se llame `GetAsyncKeyState` antes.
+- `Sheets::Init()` ahora se llama al inicio de `main()` (antes del loop), no solo en `OpenSession()`. Esto asegura que las discoverables se cargan al iniciar el juego, no solo al abrir el journal.
+
+**Fix 2: Pagina restaurada se veia perfecta en journal/custombook**
+- Causa raiz: `DrawRestoredPage()` dibujaba el fondo daniado, pero el texto se renderizaba ENCIMA, cubriendo todo el dano visual.
+- Solucion: Separado en dos funciones:
+  - `DrawRestoredPage()` - solo dibuja el fondo con color mas oscuro
+  - `DrawRestoredPageDamageOverlay()` - dibuja arrugas, manchas, tajos y bordes rotos
+- El overlay de dano ahora se dibuja DESPUES del texto, haciendo las marcas visibles sobre el contenido.
+- Aplicado tanto en journal (menu.cpp) como en custombooks (custombooks.cpp).
+
+**Fix 3: PickupMessage redundante en location.ini**
+- Eliminado `PickupMessage` de la generacion de location.ini en `LeaveSheetAtPlayer()`.
+- El mensaje mostrado al jugador es dinamico desde `WJConfig::Sheet_Nearby`, no necesita estar hardcodeado en cada location.ini.
+
+### Archivos modificados
+- `src/ImGuiRDR2Hook/script.cpp` - Tracker manual de key state, Sheets::Init() al inicio de main()
+- `src/ImGuiRDR2Hook/menu.cpp` - DrawRestoredPage simplificado, DrawRestoredPageDamageOverlay nuevo, llamado despues del texto
+- `src/ImGuiRDR2Hook/custombooks.cpp` - DrawRestoredPage simplificado, DrawRestoredPageDamageOverlay nuevo, llamado despues del texto
+- `src/ImGuiRDR2Hook/sheets.cpp` - Eliminado PickupMessage de LeaveSheetAtPlayer()
+- `Documentacion/CHANGELOG.md` - Actualizado con Batch 6
+- `Testing.md` - Actualizado con Batch 6
+
+### Checklist de Testing
+
+#### R key pickup - Fix critico
+- [ ] Caminar hacia una sheet -> aparece icono de tecla
+- [ ] Presionar R una vez -> personaje camina inmediatamente hacia la sheet
+- [ ] El pickup funciona desde el primer momento (sin necesidad de abrir journal primero)
+- [ ] Sheets de sesiones anteriores se detectan correctamente al iniciar el juego
+
+#### Pagina restaurada - Visual sobre texto
+- [ ] Rippear pagina del journal -> escribir algo -> presionar ESC para restaurar
+- [ ] Navegar a la pagina restaurada -> ¿se ven las arrugas SOBRE el texto?
+- [ ] Las marcas de dano (arrugas, manchas, tajos) son visibles encima del contenido
+- [ ] Mismo test en custombook -> ¿se ven las marcas sobre el texto?
+
+#### PickupMessage eliminado
+- [ ] Dejar una sheet en el mundo (L en overlay)
+- [ ] Verificar location.ini generado -> ¿NO tiene linea PickupMessage?
+- [ ] Acercarse a la sheet -> mensaje dinamico sigue apareciendo correctamente
+
+---
+
 ## [Build - Testing Fixes Batch 5] - 2026-09-03
 
 ### Fixes based on Testing.md feedback (Batch 5)
