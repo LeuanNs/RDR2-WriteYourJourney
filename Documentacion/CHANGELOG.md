@@ -1,5 +1,32 @@
 # Changelog - Write Your Journey
 
+## [Documentacion - AGENT_CONTEXT.md Completo] - 2026-09-03
+
+### Revision y actualizacion de documentacion para IA
+
+**Cambio principal: AGENT_CONTEXT.md reescrito completamente**
+
+El archivo `Agente/AGENT_CONTEXT.md` fue reescrito desde cero para incluir TODOS los sistemas implementados en el proyecto. La version anterior (v1.0) solo documentaba el journal basico y mencionaba CustomBooks de forma superficial. La nueva version cubre:
+
+**Secciones nuevas agregadas:**
+
+1. **Tabla de archivos completa con lineas** - Cada archivo del proyecto ahora tiene su conteo de lineas y descripcion detallada
+2. **Sistema CustomBooks completo** - Inventory carousel, lazy loading, Index de capitulos, barra de busqueda, bookmarks, seleccion de paginas, modo edicion, paginas ripeadas/restauradas, ediciones de texto
+3. **Sistema Sheets completo** - Rip de paginas (P hold 3s), overlay de hoja, discoverables en el mundo, caminata+crouch para pickup, animaciones (rip/restore/flip/crouch), KeepSheet, LeaveSheet, paginas restauradas con overlay de dano
+4. **Configuracion [RipSheets]** - Seccion INI para activar/desactivar sistema de sheets y configurar tecla de pickup
+5. **Arquitectura y flujo de ejecucion** - Diagrama de hilos (script, render, DllMain), reglas de hilos, flujo completo de Render() con orden de prioridad
+6. **Integracion entre sistemas** - Win32.cpp input forwarding, script.cpp bloqueo de controles, menu.cpp render order
+7. **Hook de Vulkan detallado** - Tracking de swapchains, FullImGuiReset, fix de focus check
+8. **Fuentes** - Indices 0/1/2 y cuando se cargan
+9. **Configuracion de libros custom** - Formato completo de config.ini con todos los campos
+10. **Flujo de archivos de sheets** - Discoverables, ripped_pages.ini, damaged_pages.ini
+
+**Archivos modificados:**
+- `Agente/AGENT_CONTEXT.md` - Reescrito completamente (de 195 lineas a ~330 lineas de documentacion densa)
+- `Documentacion/CHANGELOG.md` - Actualizado con esta entrada
+
+---
+
 ## [Build - Testing Fixes Batch 7] - 2026-09-03
 
 ### Fixes based on testing feedback (Batch 7)
