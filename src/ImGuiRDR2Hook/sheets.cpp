@@ -515,6 +515,7 @@ namespace Sheets
 		{
 			s_rippedCustomPages[s_ripCache.bookName].insert(page);
 			if (partner > 0) s_rippedCustomPages[s_ripCache.bookName].insert(partner);
+			CustomBooks::RipPage(s_ripCache.bookName, page);
 			int linesPerPage = 12;
 			int lineIndex = page * linesPerPage;
 			CustomBooks::MarkChapterAsRipped(s_ripCache.bookName, lineIndex);
@@ -564,6 +565,7 @@ namespace Sheets
 				it->second.erase(page);
 				if (partner > 0) it->second.erase(partner);
 			}
+			CustomBooks::RestorePage(s_overlayCache.bookName, page);
 		}
 
 		SaveRippedPagesIndex();
@@ -848,8 +850,8 @@ namespace Sheets
 
 		if (s_eHoldActive)
 		{
-			bool eDown = (GetAsyncKeyState('E') & 0x8000) != 0;
-			if (eDown)
+			bool rDown = (GetAsyncKeyState('R') & 0x8000) != 0;
+			if (rDown)
 			{
 				s_eHoldProgress += ImGui::GetIO().DeltaTime;
 				if (s_eHoldProgress >= E_HOLD_TIME)
@@ -1105,38 +1107,38 @@ namespace Sheets
 
 		ImFont* df = ImGui::GetFont();
 		ImDrawList* dl = ImGui::GetBackgroundDrawList();
-		float w = std::min(320.f, ds.x * 0.25f);
-		float h = 12.f;
+		float w = std::min(280.f, ds.x * 0.22f);
+		float h = 8.f;
 		ImVec2 c(ds.x * 0.5f, ds.y - df->FontSize * 5.0f);
 		float progress = s_ripProgress / RIP_HOLD_TIME;
 
 		const char* msg = WJConfig::RippingProgress.c_str();
-		ImVec2 msz = df->CalcTextSizeA(df->FontSize * 1.3f, FLT_MAX, 0.f, msg);
-		dl->AddText(df, df->FontSize * 1.3f, { c.x - msz.x * 0.5f, c.y - h - df->FontSize * 2.0f },
-			FadeCol(IM_COL32(255, 230, 180, 255), A), msg);
+		ImVec2 msz = df->CalcTextSizeA(df->FontSize * 1.1f, FLT_MAX, 0.f, msg);
+		dl->AddText(df, df->FontSize * 1.1f, { c.x - msz.x * 0.5f, c.y - h - df->FontSize * 1.8f },
+			FadeCol(IM_COL32(220, 200, 160, 230), A), msg);
 
-		dl->AddRectFilled({ c.x - w * 0.5f - 3.f, c.y - h * 0.5f - 3.f },
-			{ c.x + w * 0.5f + 3.f, c.y + h * 0.5f + 3.f },
-			FadeCol(IM_COL32(0, 0, 0, 200), A), 5.f);
+		dl->AddRectFilled({ c.x - w * 0.5f - 2.f, c.y - h * 0.5f - 2.f },
+			{ c.x + w * 0.5f + 2.f, c.y + h * 0.5f + 2.f },
+			FadeCol(IM_COL32(0, 0, 0, 180), A), 4.f);
 
 		dl->AddRectFilled({ c.x - w * 0.5f, c.y - h * 0.5f },
 			{ c.x + w * 0.5f, c.y + h * 0.5f },
-			FadeCol(IM_COL32(40, 30, 20, 220), A), 4.f);
+			FadeCol(IM_COL32(40, 30, 20, 200), A), 3.f);
 
 		if (progress > 0.01f)
 		{
-			float fillW = (w - 4.f) * progress;
+			float fillW = (w - 3.f) * progress;
 			dl->AddRectFilledMultiColor(
-				{ c.x - w * 0.5f + 2.f, c.y - h * 0.5f + 2.f },
-				{ c.x - w * 0.5f + 2.f + fillW, c.y + h * 0.5f - 2.f },
-				FadeCol(IM_COL32(255, 200, 80, 255), A),
-				FadeCol(IM_COL32(255, 180, 60, 255), A),
-				FadeCol(IM_COL32(255, 180, 60, 255), A),
-				FadeCol(IM_COL32(255, 200, 80, 255), A));
+				{ c.x - w * 0.5f + 1.5f, c.y - h * 0.5f + 1.5f },
+				{ c.x - w * 0.5f + 1.5f + fillW, c.y + h * 0.5f - 1.5f },
+				FadeCol(IM_COL32(200, 170, 90, 230), A),
+				FadeCol(IM_COL32(180, 150, 70, 230), A),
+				FadeCol(IM_COL32(180, 150, 70, 230), A),
+				FadeCol(IM_COL32(200, 170, 90, 230), A));
 		}
 
 		dl->AddRect({ c.x - w * 0.5f, c.y - h * 0.5f }, { c.x + w * 0.5f, c.y + h * 0.5f },
-			FadeCol(IM_COL32(255, 215, 100, 220), A), 4.f, 0, 2.5f);
+			FadeCol(IM_COL32(180, 160, 100, 180), A), 3.f, 0, 1.5f);
 	}
 
 	static void DrawRipAnimation(const ImVec2 ds, float A)
@@ -1245,7 +1247,7 @@ namespace Sheets
 
 		float keySize = 40.f;
 		ImVec2 keyCenter{ ds.x * 0.5f, y + f->FontSize * 1.5f + keySize * 0.5f + 5.f };
-		DrawKeyIcon(dl, df, "E", keyCenter, keySize, 0.f,
+		DrawKeyIcon(dl, df, "R", keyCenter, keySize, 0.f,
 			IM_COL32(20, 16, 12, 220),
 			IM_COL32(200, 185, 155, 220),
 			IM_COL32(255, 255, 255, 200),
@@ -1271,7 +1273,7 @@ namespace Sheets
 		float keySize = 48.f;
 		ImVec2 keyCenter{ ds.x * 0.5f, y + f->FontSize * 1.5f + keySize * 0.5f + 5.f };
 		float progress = s_eHoldProgress / E_HOLD_TIME;
-		DrawKeyIcon(dl, df, "E", keyCenter, keySize, progress,
+		DrawKeyIcon(dl, df, "R", keyCenter, keySize, progress,
 			IM_COL32(20, 16, 12, 220),
 			IM_COL32(255, 215, 0, 240),
 			IM_COL32(255, 255, 255, 230),
