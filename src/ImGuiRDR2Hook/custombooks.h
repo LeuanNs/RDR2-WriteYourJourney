@@ -83,4 +83,12 @@ namespace CustomBooks
 	bool IsNearPickup();
 	const std::string& GetPickupMessage();
 	void RenderPickupPrompt();
+
+	void OpenIndex();
+	void CloseIndex();
+	bool IsIndexOpen();
+	void RenderIndex();
+
+	void MarkChapterAsRipped(const std::string& bookName, int lineIndex);
+	int GetNextValidLineIndex(const std::string& bookName, int lineIndex);
 }

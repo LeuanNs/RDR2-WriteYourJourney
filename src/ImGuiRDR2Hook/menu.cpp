@@ -1950,6 +1950,12 @@ void CImGuiMenu::Render()
 		return;
 	}
 
+	if (CustomBooks::IsIndexOpen() && !GetIsOpen())
+	{
+		CustomBooks::RenderIndex();
+		return;
+	}
+
 	if (CustomBooks::IsBookOpen() && !GetIsOpen())
 	{
 		CustomBooks::RenderBook();

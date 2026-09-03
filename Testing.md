@@ -1,5 +1,5 @@
 # Testing - Write Your Journey - Guia Rapida para Leuan
-> Ultima Build: 2026-09-02 (Sheets + Bookmarks + Colores + Lazy Loading)
+> Ultima Build: 2026-09-02 (Sheets + Index CustomBooks + Barra Mejorada)
 > Como usar: entra al juego, ve seccion por seccion. Marca [x] si OK, deja [ ] si falla y anota al lado que viste.
 
 ## Como reportarme
@@ -14,7 +14,7 @@ Yo lo cruzo con el changelog y actualizo el todo.
 **Preparacion:** abre el journal (J 3s), escribe algo en pag 2 y dibuja un trazo. Quedate en esa pagina seleccionada.
 
 - [ ] ¿Ves abajo "P: Rip Page" junto a ESC/K/R? (NO debe ser cuadro, solo texto)
-- [ ] Mantén P 3s -> ¿barra "Ripping page..." se llena arriba del centro?
+- [ ] Mantén P 3s -> ¿barra "Ripping page..." se llena? **AHORA MAS VISIBLE:** 320px ancho x 12px alto, texto grande dorado, fondo oscuro con borde redondeado, barra con gradiente dorado brillante
 - [ ] Suelta P a los 1-2s -> ¿barra se cancela y NO pasa nada?
 - [ ] Mantén P 3s completo -> ¿hoja se desliza/rota y hace fade saliendo del libro? (0.9s)
 - [ ] ¿Overlay centrado aparece con la misma hoja, bordes rasgados/irregulares, color pergamino, texto + dibujo igual?
@@ -32,13 +32,21 @@ Yo lo cruzo con el changelog y actualizo el todo.
 - [ ] Prueba que P/E/L/R no rompen CustomBooks ni Journal (ver secc 10)
 
 **Si algo falla anota:** ¿barra no aparece? ¿animacion trabada? ¿archivos no creados? ¿overlay vacio?
-1.- la animación está decente, pero no se muestra el journal/book, la animación debe ser encima de eso, no con eso apagado
-2.- Al estar cerca de un sheet suelta y apretar E para leerla, la imgui se bugea y nunca más se puede sacar, no responde ni a R ni a ESC
-3.- Al mostrar/leer la hoja arrancada, se muestra bien, pero hay un cuadrado rodeándola como un poco blanco, hay que sacar eso, solo dejar la hoja cruda, dibujo y texto
-4.- Idealmente hacer que al apretar "E" cerca de la hoja arrancada para leerla, hagamos al personaje (aun con todo bloqueado) caminar hacia esa coordenada (caminando lento), y nos agachamos... (simulando recogerla)
-y ahi recién se muestre la hoja arrancada para leerla
-5.- al dejar la página con "L", hay que volver al journal, si ya dejamos la página, hay que cerrar ese menú de mostrandohojaarrancada, ya que al dejarla ahi, ya no la queremos ver más, asi que volvemos al journal/custombook que estaba mostrándose, y aplicamos
-ese efecto de mostrar la página siguiente, por ej si se arranco la pág 2, que al momento de seleccionar páginas, no se vea pág 1 y pag 2, si no que pág 1 y pág 4 (pq se supone la 2 esta arrancada y la 3 pertenece a la izq, asi que quedaría mostrando la 4)
+
+---
+
+### 0.5) NUEVO - Index de CustomBooks
+**Preparacion:** abre satchel (B 3s), selecciona un libro que tenga index.json con capitulos (ej: LaBibliaNT1858)
+
+- [ ] En satchel, con libro seleccionado, ¿ves "I: Index" junto a "K: Bookmark | R: Random Page"?
+- [ ] Pulsa I -> ¿abre pantalla completa con fondo oscuro y titulo "Index" centrado arriba?
+- [ ] ¿Lista de capitulos aparece centrada verticalmente?
+- [ ] Flecha arriba/abajo -> ¿navegas entre capitulos? Capitulo seleccionado se ve dorado (255,215,0) y mas grande
+- [ ] Enter en un capitulo -> ¿cierra Index y abre libro en esa pagina?
+- [ ] ESC en Index -> ¿cierra sin abrir libro?
+- [ ] **Test de capitulo arrancado:** arranca una pagina de CustomBook (P 3s + L), vuelve a satchel, abre Index -> ¿el capitulo correspondiente ahora dice "Ripped Sheet (TituloOriginal)"?
+- [ ] Mira `MyJourney/Books/[Nombre]/index.json` -> ¿el titulo del capitulo arrancado fue actualizado?
+
 ---
 
 ### 1) Journal - Bookmarks

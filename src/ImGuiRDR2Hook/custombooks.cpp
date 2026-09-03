@@ -35,6 +35,8 @@ namespace CustomBooks
 	static RibbonAnim s_ribbonAnim;
 	static std::string s_nearbyBook;
 	static bool s_showPickupPrompt = false;
+	static bool s_indexOpen = false;
+	static int s_selectedChapterIdx = 0;
 
 	static fs::path GetBooksDir()
 	{
@@ -640,9 +642,11 @@ namespace CustomBooks
 			ImVec2 ms = f->CalcTextSizeA(f->FontSize * 0.9f, FLT_MAX, 0.f, meta);
 			dl->AddText(f, f->FontSize * 0.9f, { ds.x * 0.5f - ms.x * 0.5f, metaY + f->FontSize * 1.5f }, IM_COL32(180, 160, 120, 220), meta);
 
-			const char* navHint = WJConfig::CB_NavHintRandom.c_str();
-			ImVec2 ns = f->CalcTextSizeA(f->FontSize * 0.85f, FLT_MAX, 0.f, navHint);
-			dl->AddText(f, f->FontSize * 0.85f, { ds.x * 0.5f - ns.x * 0.5f, ds.y - 40.f }, IM_COL32(160, 140, 100, 200), navHint);
+			std::string navHint = WJConfig::CB_NavHintRandom;
+			if (book.config.hasIndex && !book.chapters.empty())
+				navHint += "   |   I: Index";
+			ImVec2 ns = f->CalcTextSizeA(f->FontSize * 0.85f, FLT_MAX, 0.f, navHint.c_str());
+			dl->AddText(f, f->FontSize * 0.85f, { ds.x * 0.5f - ns.x * 0.5f, ds.y - 40.f }, IM_COL32(160, 140, 100, 200), navHint.c_str());
 		}
 
 		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
@@ -721,6 +725,21 @@ namespace CustomBooks
 				int totalPages = (int)wrapped.size() / linesPerPage + 1;
 				s_currentPage = rand() % totalPages;
 				OpenBook(bookName);
+			}
+		}
+
+		if (ImGui::IsKeyPressed(ImGuiKey_I, false))
+		{
+			if (!s_filteredBooks.empty() && s_selectedBookIdx >= 0 && s_selectedBookIdx < (int)s_filteredBooks.size())
+			{
+				const std::string& bookName = s_filteredBooks[s_selectedBookIdx];
+				LoadBook(bookName);
+				auto& book = s_loadedBooks[bookName];
+				if (book.config.hasIndex && !book.chapters.empty())
+				{
+					s_currentBook = bookName;
+					OpenIndex();
+				}
 			}
 		}
 	}
@@ -1084,5 +1103,146 @@ namespace CustomBooks
 		float y = ds.y * 0.75f;
 
 		dl->AddText(f, f->FontSize * 1.2f, { x, y }, IM_COL32(234, 223, 197, 255), msg);
+	}
+
+	void OpenIndex()
+	{
+		s_indexOpen = true;
+		s_selectedChapterIdx = 0;
+	}
+
+	void CloseIndex()
+	{
+		s_indexOpen = false;
+	}
+
+	bool IsIndexOpen()
+	{
+		return s_indexOpen;
+	}
+
+	void RenderIndex()
+	{
+		if (!s_indexOpen || s_currentBook.empty()) return;
+
+		auto it = s_loadedBooks.find(s_currentBook);
+		if (it == s_loadedBooks.end()) return;
+		auto& book = it->second;
+
+		if (book.chapters.empty()) return;
+
+		ImGuiIO& io = ImGui::GetIO();
+		ImDrawList* dl = ImGui::GetBackgroundDrawList();
+		ImVec2 ds = io.DisplaySize;
+		ImFont* f = io.Fonts->Fonts[1] ? io.Fonts->Fonts[1] : io.Fonts->Fonts[0];
+
+		dl->AddRectFilled({ 0, 0 }, ds, IM_COL32(10, 8, 5, 230));
+
+		const char* title = "Index";
+		ImVec2 ts = f->CalcTextSizeA(f->FontSize * 2.0f, FLT_MAX, 0.f, title);
+		dl->AddText(f, f->FontSize * 2.0f, { ds.x * 0.5f - ts.x * 0.5f, 50.f }, IM_COL32(230, 205, 160, 255), title);
+
+		float startY = 120.f;
+		float lineHeight = f->FontSize * 2.5f;
+		float maxVisible = (ds.y - startY - 80.f) / lineHeight;
+		int visibleCount = std::min((int)book.chapters.size(), (int)maxVisible);
+
+		int startIdx = std::max(0, s_selectedChapterIdx - (int)(maxVisible / 2));
+		if (startIdx + visibleCount > (int)book.chapters.size())
+			startIdx = std::max(0, (int)book.chapters.size() - visibleCount);
+
+		for (int i = 0; i < visibleCount; ++i)
+		{
+			int chapterIdx = startIdx + i;
+			if (chapterIdx >= (int)book.chapters.size()) break;
+
+			const auto& chapter = book.chapters[chapterIdx];
+			float y = startY + i * lineHeight;
+			bool isSelected = (chapterIdx == s_selectedChapterIdx);
+
+			ImU32 textCol = isSelected ? IM_COL32(255, 215, 0, 255) : IM_COL32(200, 180, 140, 220);
+			float fontSize = isSelected ? f->FontSize * 1.3f : f->FontSize * 1.1f;
+
+			ImVec2 cs = f->CalcTextSizeA(fontSize, FLT_MAX, 0.f, chapter.title.c_str());
+			dl->AddText(f, fontSize, { ds.x * 0.5f - cs.x * 0.5f, y }, textCol, chapter.title.c_str());
+		}
+
+		const char* hint = "Arrows: Navigate   |   Enter: Go to chapter   |   ESC: Close";
+		ImVec2 hs = f->CalcTextSizeA(f->FontSize * 0.9f, FLT_MAX, 0.f, hint);
+		dl->AddText(f, f->FontSize * 0.9f, { ds.x * 0.5f - hs.x * 0.5f, ds.y - 40.f }, IM_COL32(160, 140, 100, 200), hint);
+
+		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+			CloseIndex();
+
+		if (ImGui::IsKeyPressed(ImGuiKey_UpArrow, false))
+		{
+			if (s_selectedChapterIdx > 0)
+				s_selectedChapterIdx--;
+		}
+
+		if (ImGui::IsKeyPressed(ImGuiKey_DownArrow, false))
+		{
+			if (s_selectedChapterIdx < (int)book.chapters.size() - 1)
+				s_selectedChapterIdx++;
+		}
+
+		if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false))
+		{
+			if (s_selectedChapterIdx >= 0 && s_selectedChapterIdx < (int)book.chapters.size())
+			{
+				int targetLine = book.chapters[s_selectedChapterIdx].lineIndex;
+				int linesPerPage = 12;
+				s_currentPage = targetLine / linesPerPage;
+				CloseIndex();
+			}
+		}
+	}
+
+	void MarkChapterAsRipped(const std::string& bookName, int lineIndex)
+	{
+		auto it = s_loadedBooks.find(bookName);
+		if (it == s_loadedBooks.end()) return;
+		auto& book = it->second;
+
+		for (auto& chapter : book.chapters)
+		{
+			if (chapter.lineIndex == lineIndex)
+			{
+				chapter.title = WJConfig::Sheet_RippedChapter + " (" + chapter.title + ")";
+				break;
+			}
+		}
+
+		fs::path indexPath = GetBooksDir() / bookName / "index.json";
+		std::ofstream out(indexPath, std::ios::trunc);
+		if (out)
+		{
+			out << "{\n  \"chapters\": [\n";
+			for (size_t i = 0; i < book.chapters.size(); ++i)
+			{
+				out << "    {\"title\": \"" << book.chapters[i].title << "\", \"line\": " << book.chapters[i].lineIndex << "}";
+				if (i < book.chapters.size() - 1) out << ",";
+				out << "\n";
+			}
+			out << "  ]\n}";
+		}
+	}
+
+	int GetNextValidLineIndex(const std::string& bookName, int lineIndex)
+	{
+		auto it = s_loadedBooks.find(bookName);
+		if (it == s_loadedBooks.end()) return lineIndex;
+		auto& book = it->second;
+
+		for (size_t i = 0; i < book.chapters.size(); ++i)
+		{
+			if (book.chapters[i].lineIndex == lineIndex)
+			{
+				if (i + 1 < book.chapters.size())
+					return book.chapters[i + 1].lineIndex;
+				break;
+			}
+		}
+		return lineIndex;
 	}
 }
