@@ -1124,7 +1124,10 @@ namespace CustomBooks
 		std::string hintStr = WJConfig::CB_BookNavHint;
 		if (s_cbSelectedPage >= 0)
 		{
-			hintStr += "   |   ENTER: Selection Mode   |   P: Rip Page   |   E: Edit   |   ESC: Deselect";
+			hintStr += "   |   ENTER: Selection Mode";
+			if (WJConfig::RipSheetsEnabled)
+				hintStr += "   |   P: Rip Page";
+			hintStr += "   |   E: Edit   |   ESC: Deselect";
 		}
 		else
 		{
@@ -1218,7 +1221,7 @@ namespace CustomBooks
 			{
 				s_cbSelectedPage = -1;
 			}
-			else if (ImGui::IsKeyPressed(ImGuiKey_P, false))
+			else if (WJConfig::RipSheetsEnabled && ImGui::IsKeyPressed(ImGuiKey_P, false))
 			{
 				if (!IsPageRipped(s_currentBook, s_cbSelectedPage))
 				{
@@ -1783,82 +1786,99 @@ namespace CustomBooks
 			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
 		};
 
-		dl->AddRectFilled(mn, mx, IM_COL32(195, 185, 160, 255));
+		dl->AddRectFilled(mn, mx, IM_COL32(175, 165, 140, 255));
+
+		for (int i = 0; i < 14; ++i)
+		{
+			float y1 = mn.y + (mx.y - mn.y) * rng(seed);
+			float y2 = y1 + (rng(seed) - 0.5f) * 30.f;
+			float x1 = mn.x + rng(seed) * (mx.x - mn.x) * 0.2f;
+			float x2 = x1 + (mx.x - mn.x) * (0.5f + rng(seed) * 0.5f);
+			dl->AddLine({ x1, y1 }, { x2, y2 }, IM_COL32(140, 130, 110, 120), 1.5f);
+		}
 
 		for (int i = 0; i < 8; ++i)
 		{
-			float y1 = mn.y + (mx.y - mn.y) * rng(seed);
-			float y2 = y1 + (rng(seed) - 0.5f) * 20.f;
-			float x1 = mn.x + rng(seed) * (mx.x - mn.x) * 0.3f;
-			float x2 = x1 + (mx.x - mn.x) * (0.4f + rng(seed) * 0.4f);
-			dl->AddLine({ x1, y1 }, { x2, y2 }, IM_COL32(160, 150, 130, 80), 1.f);
+			float cx = mn.x + rng(seed) * (mx.x - mn.x);
+			float cy = mn.y + rng(seed) * (mx.y - mn.y);
+			float r = 4.f + rng(seed) * 12.f;
+			dl->AddCircleFilled({ cx, cy }, r, IM_COL32(130, 120, 100, 90), 8);
 		}
 
 		for (int i = 0; i < 5; ++i)
 		{
-			float cx = mn.x + rng(seed) * (mx.x - mn.x);
-			float cy = mn.y + rng(seed) * (mx.y - mn.y);
-			float r = 3.f + rng(seed) * 8.f;
-			dl->AddCircleFilled({ cx, cy }, r, IM_COL32(140, 130, 110, 60), 8);
+			float x1 = mn.x + rng(seed) * (mx.x - mn.x);
+			float y1 = mn.y + rng(seed) * (mx.y - mn.y);
+			float x2 = x1 + (rng(seed) - 0.5f) * 40.f;
+			float y2 = y1 + (rng(seed) - 0.5f) * 40.f;
+			dl->AddLine({ x1, y1 }, { x2, y2 }, IM_COL32(120, 110, 90, 100), 1.f);
 		}
 
-		float tearSize = 8.f + rng(seed) * 6.f;
+		float tearSize = 12.f + rng(seed) * 10.f;
 		std::vector<ImVec2> topTear;
 		if (isLeft)
 		{
 			topTear.push_back({ mx.x, mn.y });
-			for (float x = mx.x; x > mx.x - tearSize * 2.f; x -= 3.f)
+			for (float x = mx.x; x > mx.x - tearSize * 3.f; x -= 2.5f)
 			{
-				float jy = mn.y + (rng(seed) - 0.3f) * tearSize;
+				float jy = mn.y + (rng(seed) - 0.3f) * tearSize * 1.5f;
 				topTear.push_back({ x, jy });
 			}
-			topTear.push_back({ mx.x - tearSize * 2.f, mn.y });
+			topTear.push_back({ mx.x - tearSize * 3.f, mn.y });
 		}
 		else
 		{
 			topTear.push_back({ mn.x, mn.y });
-			for (float x = mn.x; x < mn.x + tearSize * 2.f; x += 3.f)
+			for (float x = mn.x; x < mn.x + tearSize * 3.f; x += 2.5f)
 			{
-				float jy = mn.y + (rng(seed) - 0.3f) * tearSize;
+				float jy = mn.y + (rng(seed) - 0.3f) * tearSize * 1.5f;
 				topTear.push_back({ x, jy });
 			}
-			topTear.push_back({ mn.x + tearSize * 2.f, mn.y });
+			topTear.push_back({ mn.x + tearSize * 3.f, mn.y });
 		}
 		if (topTear.size() >= 3)
-			dl->AddConvexPolyFilled(topTear.data(), (int)topTear.size(), IM_COL32(180, 170, 145, 200));
+			dl->AddConvexPolyFilled(topTear.data(), (int)topTear.size(), IM_COL32(160, 150, 125, 220));
 
 		std::vector<ImVec2> bottomTear;
 		if (isLeft)
 		{
 			bottomTear.push_back({ mx.x, mx.y });
-			for (float x = mx.x; x > mx.x - tearSize * 1.5f; x -= 3.f)
+			for (float x = mx.x; x > mx.x - tearSize * 2.5f; x -= 2.5f)
 			{
-				float jy = mx.y - (rng(seed) - 0.3f) * tearSize;
+				float jy = mx.y - (rng(seed) - 0.3f) * tearSize * 1.5f;
 				bottomTear.push_back({ x, jy });
 			}
-			bottomTear.push_back({ mx.x - tearSize * 1.5f, mx.y });
+			bottomTear.push_back({ mx.x - tearSize * 2.5f, mx.y });
 		}
 		else
 		{
 			bottomTear.push_back({ mn.x, mx.y });
-			for (float x = mn.x; x < mn.x + tearSize * 1.5f; x += 3.f)
+			for (float x = mn.x; x < mn.x + tearSize * 2.5f; x += 2.5f)
 			{
-				float jy = mx.y - (rng(seed) - 0.3f) * tearSize;
+				float jy = mx.y - (rng(seed) - 0.3f) * tearSize * 1.5f;
 				bottomTear.push_back({ x, jy });
 			}
-			bottomTear.push_back({ mn.x + tearSize * 1.5f, mx.y });
+			bottomTear.push_back({ mn.x + tearSize * 2.5f, mx.y });
 		}
 		if (bottomTear.size() >= 3)
-			dl->AddConvexPolyFilled(bottomTear.data(), (int)bottomTear.size(), IM_COL32(180, 170, 145, 200));
+			dl->AddConvexPolyFilled(bottomTear.data(), (int)bottomTear.size(), IM_COL32(160, 150, 125, 220));
 
-		for (int i = 0; i < 3; ++i)
+		for (int i = 0; i < 6; ++i)
 		{
-			float sx = isLeft ? (mx.x - 5.f - rng(seed) * 15.f) : (mn.x + 5.f + rng(seed) * 15.f);
-			float sy = mn.y + (mx.y - mn.y) * (0.2f + rng(seed) * 0.6f);
-			float sLen = 5.f + rng(seed) * 10.f;
-			float sAngle = (rng(seed) - 0.5f) * 0.5f;
+			float sx = isLeft ? (mx.x - 3.f - rng(seed) * 20.f) : (mn.x + 3.f + rng(seed) * 20.f);
+			float sy = mn.y + (mx.y - mn.y) * (0.1f + rng(seed) * 0.8f);
+			float sLen = 8.f + rng(seed) * 16.f;
+			float sAngle = (rng(seed) - 0.5f) * 0.7f;
 			dl->AddLine({ sx, sy }, { sx + std::cos(sAngle) * sLen, sy + std::sin(sAngle) * sLen },
-			            IM_COL32(120, 110, 90, 150), 1.5f);
+			            IM_COL32(100, 90, 70, 180), 2.f);
+		}
+
+		for (int i = 0; i < 4; ++i)
+		{
+			float cx = mn.x + (mx.x - mn.x) * (0.1f + rng(seed) * 0.8f);
+			float cy = mn.y + (mx.y - mn.y) * (0.1f + rng(seed) * 0.8f);
+			float r = 5.f + rng(seed) * 12.f;
+			dl->AddCircleFilled({ cx, cy }, r, IM_COL32(150, 140, 115, 70), 12);
 		}
 	}
 
