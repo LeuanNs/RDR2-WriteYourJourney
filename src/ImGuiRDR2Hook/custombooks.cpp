@@ -187,27 +187,33 @@ namespace CustomBooks
 
 	static void LoadChunk(CustomBook& book, int centerLine)
 	{
-		fs::path bodyPath = GetBooksDir() / book.internalName / "body.txt";
-		std::ifstream f(bodyPath);
-		if (!f) return;
-
-		int halfChunk = LAZY_CHUNK_SIZE / 2;
-		int startLine = std::max(0, centerLine - halfChunk);
-		int endLine = startLine + LAZY_CHUNK_SIZE;
-
-		book.lines.clear();
-		std::string line;
-		int lineNum = 0;
-		while (std::getline(f, line))
+		try
 		{
-			if (lineNum >= startLine && lineNum < endLine)
-				book.lines.push_back(line);
-			lineNum++;
-			if (lineNum >= endLine) break;
-		}
+			fs::path bodyPath = GetBooksDir() / book.internalName / "body.txt";
+			std::ifstream f(bodyPath);
+			if (!f) return;
 
-		book.lazyStartLine = startLine;
-		book.lazyLoadedCount = (int)book.lines.size();
+			int halfChunk = LAZY_CHUNK_SIZE / 2;
+			int startLine = std::max(0, centerLine - halfChunk);
+			int endLine = startLine + LAZY_CHUNK_SIZE;
+
+			book.lines.clear();
+			std::string line;
+			int lineNum = 0;
+			while (std::getline(f, line))
+			{
+				if (lineNum >= startLine && lineNum < endLine)
+					book.lines.push_back(line);
+				lineNum++;
+				if (lineNum >= endLine) break;
+			}
+
+			book.lazyStartLine = startLine;
+			book.lazyLoadedCount = (int)book.lines.size();
+		}
+		catch (...)
+		{
+		}
 	}
 
 	void Init()
@@ -1612,28 +1618,36 @@ namespace CustomBooks
 		{
 			if (s_selectedChapterIdx >= 0 && s_selectedChapterIdx < (int)book.chapters.size())
 			{
-				int targetLine = book.chapters[s_selectedChapterIdx].lineIndex;
-				
-				float bookW = ds.x * 0.6f;
-				float bookH = ds.y * 0.75f;
-				float margin = 30.f;
-				float pageTextH = bookH - margin * 2.f;
-				ImFont* f = io.Fonts->Fonts[1] ? io.Fonts->Fonts[1] : io.Fonts->Fonts[0];
-				float fontSize = f->FontSize + book.config.fontSizeOverride;
-				if (fontSize < 10.f) fontSize = 10.f;
-				float lineH = fontSize * 1.6f;
-				int linesPerPage = (int)(pageTextH / lineH);
-				if (linesPerPage < 1) linesPerPage = 1;
-				
-				s_currentPage = targetLine / (linesPerPage * 2);
-
-				if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
+				try
 				{
-					LoadChunk(book, targetLine);
-				}
+					int targetLine = book.chapters[s_selectedChapterIdx].lineIndex;
+					
+					float bookW = ds.x * 0.6f;
+					float bookH = ds.y * 0.75f;
+					float margin = 30.f;
+					float pageTextH = bookH - margin * 2.f;
+					ImFont* f = io.Fonts->Fonts[1] ? io.Fonts->Fonts[1] : io.Fonts->Fonts[0];
+					float fontSize = f->FontSize + book.config.fontSizeOverride;
+					if (fontSize < 10.f) fontSize = 10.f;
+					float lineH = fontSize * 1.6f;
+					int linesPerPage = (int)(pageTextH / lineH);
+					if (linesPerPage < 1) linesPerPage = 1;
+					
+					int targetPage = targetLine / (linesPerPage * 2);
 
-				CloseIndex();
-				OpenBook(s_currentBook);
+					if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
+					{
+						LoadChunk(book, targetLine);
+					}
+
+					CloseIndex();
+					OpenBook(s_currentBook);
+					s_currentPage = targetPage;
+				}
+				catch (...)
+				{
+					CloseIndex();
+				}
 			}
 		}
 	}
