@@ -373,13 +373,33 @@ namespace
 
 void main()
 {
+	constexpr int RELOAD_HOLD_MS = 5000;
+	bool s_reloadHolding = false;
+	DWORD s_reloadHoldStart = 0;
+
 	while (true)
 	{
-		if ((SafeGetAsyncKeyState(WJConfig::ReloadButton) & 0x0001) != 0)
+		bool rDown = (SafeGetAsyncKeyState('R') & 0x8000) != 0;
+		bool pDown = (SafeGetAsyncKeyState('P') & 0x8000) != 0;
+		
+		if (rDown && pDown)
 		{
-			WJConfig::Load();
-			if (s_active)
-				ForceCloseJournal();
+			if (!s_reloadHolding)
+			{
+				s_reloadHolding = true;
+				s_reloadHoldStart = GetTickCount();
+			}
+			else if (GetTickCount() - s_reloadHoldStart >= RELOAD_HOLD_MS)
+			{
+				WJConfig::Load();
+				if (s_active)
+					ForceCloseJournal();
+				s_reloadHolding = false;
+			}
+		}
+		else
+		{
+			s_reloadHolding = false;
 		}
 
 		// Bloqueo de controles para satchel/libros del mod (independiente del journal)

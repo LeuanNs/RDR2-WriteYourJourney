@@ -1,5 +1,119 @@
 # Changelog - Write Your Journey
 
+## [Build - Testing Fixes Batch 1] - 2026-09-02
+
+### Fixes based on Testing.md feedback
+
+**Fix 1: R:Look Behind - Populate back content when ripping pages**
+- Modified `StartRipPage()` to accept back content parameters (backText, backDrawing)
+- When ripping a journal page, now loads partner page content and passes it
+- When ripping a custombook page, now loads partner page content and passes it
+- "R: Look Behind" now shows in overlay when partner page has content
+- 3D flip animation now displays partner page content correctly
+
+**Fix 2: Custombook rip rendering - Add Sheets::Render() calls**
+- Moved Sheets::Render() call before custombook early returns in menu.cpp
+- Rip progress bar and animation now show when ripping custombook pages
+- Overlay now displays correctly when ripping from custombooks
+
+**Fix 3: Index - Close inventory when opening**
+- Added `CloseInventory()` call when opening Index with I key
+- Index now renders immediately without needing to press ENTER
+- Inventory state is properly cleared when transitioning to Index
+
+**Fix 4: Index - Correct page calculation for lazy loading**
+- Changed page calculation from `targetLine / linesPerPage` to `targetLine / (linesPerPage * 2)`
+- s_currentPage is the page PAIR index, not individual page index
+- Jumping to far chapters via Index now loads correct chunk
+- Pages render correctly instead of showing blank
+
+**Fix 5: Lazy loading - Adjust startLine for chunk offset**
+- Modified drawPage lambda to subtract `lazyStartLine` from startLine
+- Added bounds check: `if (startLine < 0 || startLine >= wrappedLines.size()) return;`
+- Forward navigation now renders text correctly beyond page 58
+- Chunk offset is properly accounted for in all page rendering
+
+**Fix 6: Search bar - Add space key support**
+- Added ImGuiKey_Space handling in search bar input
+- Can now search for multi-word titles like "la biblia"
+- Space character is properly added to search buffer
+
+**Fix 7: Search bar - Add visual feedback when focused**
+- Added blinking "|" cursor when search bar is focused
+- Cursor blinks at 0.5s intervals using ImGui::GetTime()
+- Cursor appears after text if buffer is not empty
+- Clear visual indication that search bar is active
+
+**Fix 8: Search bar - Unfocus on ESC/close**
+- Added `s_searchFocused = false` when ESC is pressed in inventory
+- Added `s_searchFocused = false` in CloseInventory()
+- Search bar properly loses focus when inventory closes
+- Prevents stuck focused state after closing
+
+**Fix 9: Night tint - Make it darker**
+- Changed night tint from `IM_COL32(120, 110, 95, 130)` to `IM_COL32(80, 70, 55, 180)`
+- Increased alpha from 130 to 180 for more opacity
+- Decreased RGB values for darker appearance
+- Night time journal is now properly dimmed
+
+**Fix 10: Change reload from F5 to R+P hold 5s**
+- Removed single-key reload check
+- Added R+P hold detection with 5 second timer
+- Both keys must be held simultaneously for 5 seconds
+- Prevents accidental reloads during gameplay
+- Timer resets if either key is released
+
+### Archivos modificados
+- `src/ImGuiRDR2Hook/sheets.h` - Added back content parameters to StartRipPage()
+- `src/ImGuiRDR2Hook/sheets.cpp` - Store back content in rip cache
+- `src/ImGuiRDR2Hook/menu.cpp` - Load partner page content, fix Render() order, darker night tint
+- `src/ImGuiRDR2Hook/custombooks.cpp` - Load partner content, fix Index, fix lazy loading, fix search bar
+- `src/ImGuiRDR2Hook/script.cpp` - R+P hold 5s reload logic
+
+### Checklist de Testing
+
+#### Sheets - R:Look Behind
+- [ ] Rippear pag 2 del journal -> overlay muestra "R: Look Behind" si pag 3 tiene contenido
+- [ ] Presionar R -> animacion 3D de giro (escala horizontal)
+- [ ] Al terminar giro -> muestra contenido de pag 3 (trasera)
+- [ ] Presionar R de nuevo -> gira de vuelta al frente (pag 2)
+- [ ] Rippear pagina de custombook -> mismo comportamiento con pagina partner
+
+#### CustomBooks - Rip rendering
+- [ ] Seleccionar pagina en custombook -> mantener P 3s
+- [ ] Barra de progreso "Ripping page..." debe aparecer
+- [ ] Animacion de hoja saliendo debe verse
+- [ ] Overlay con contenido debe aparecer despues
+
+#### CustomBooks - Index
+- [ ] En satchel con libro seleccionado -> presionar I
+- [ ] Index debe abrirse INMEDIATAMENTE (sin ENTER)
+- [ ] Abrir capitulo en pagina lejana (ej: 940) -> lazy loading funciona, pagina se ve
+
+#### CustomBooks - Lazy Loading
+- [ ] Abrir Biblia NT 1858 -> navegar hacia adelante
+- [ ] Llegar a pag 58+ -> texto sigue renderizando (no se corta)
+- [ ] Navegar hacia atras y adelante -> chunks se cargan correctamente
+- [ ] Abrir libro en pagina aleatoria (R) -> lazy loading funciona
+
+#### CustomBooks - Search bar
+- [ ] Click en barra de busqueda -> aparece "|" cursor parpadeante
+- [ ] Escribir "la biblia" -> espacio funciona, busca correctamente
+- [ ] Presionar ESC -> barra se desenfoca
+- [ ] Cerrar satchel -> barra se desenfoca
+
+#### Journal - Night tint
+- [ ] Esperar a que sea de noche (21:00 - 06:00)
+- [ ] Abrir journal -> tinte nocturno mas oscuro que antes
+- [ ] No deslumbra de noche
+
+#### General - Reload
+- [ ] Mantener R+P durante 5s -> config se recarga
+- [ ] Soltar antes de 5s -> no pasa nada
+- [ ] Journal abierto + R+P 5s -> journal se cierra y config se recarga
+
+---
+
 ## [Build - Fixes Masivos Sheets + CustomBooks] - 2026-09-02
 
 ### Fixes en Sistema de Sheets (Hojas Arrancadas)

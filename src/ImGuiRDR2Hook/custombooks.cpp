@@ -262,6 +262,7 @@ namespace CustomBooks
 	void CloseInventory()
 	{
 		s_inventoryOpen = false;
+		s_searchFocused = false;
 	}
 
 	bool IsInventoryOpen()
@@ -548,12 +549,33 @@ namespace CustomBooks
 			const char* searchHint = WJConfig::CB_SearchHint.c_str();
 			if (s_searchBuffer[0] == 0)
 			{
-				ImVec2 hs = f->CalcTextSizeA(f->FontSize * 0.9f, FLT_MAX, 0.f, searchHint);
-				dl->AddText(f, f->FontSize * 0.9f, { searchBarX + 10.f, searchBarY + 10.f }, IM_COL32(120, 100, 80, 180), searchHint);
+				if (s_searchFocused)
+				{
+					float blink = (float)ImGui::GetTime();
+					if (fmod(blink, 1.0f) < 0.5f)
+					{
+						ImVec2 hs = f->CalcTextSizeA(f->FontSize * 0.9f, FLT_MAX, 0.f, "|");
+						dl->AddText(f, f->FontSize * 0.9f, { searchBarX + 10.f, searchBarY + 10.f }, IM_COL32(234, 223, 197, 255), "|");
+					}
+				}
+				else
+				{
+					ImVec2 hs = f->CalcTextSizeA(f->FontSize * 0.9f, FLT_MAX, 0.f, searchHint);
+					dl->AddText(f, f->FontSize * 0.9f, { searchBarX + 10.f, searchBarY + 10.f }, IM_COL32(120, 100, 80, 180), searchHint);
+				}
 			}
 			else
 			{
 				dl->AddText(f, f->FontSize * 0.9f, { searchBarX + 10.f, searchBarY + 10.f }, IM_COL32(234, 223, 197, 255), s_searchBuffer);
+				if (s_searchFocused)
+				{
+					float blink = (float)ImGui::GetTime();
+					if (fmod(blink, 1.0f) < 0.5f)
+					{
+						ImVec2 textSz = f->CalcTextSizeA(f->FontSize * 0.9f, FLT_MAX, 0.f, s_searchBuffer);
+						dl->AddText(f, f->FontSize * 0.9f, { searchBarX + 10.f + textSz.x, searchBarY + 10.f }, IM_COL32(234, 223, 197, 255), "|");
+					}
+				}
 			}
 
 			// Handle typing in search bar ONLY if focused
@@ -573,6 +595,16 @@ namespace CustomBooks
 							s_searchBuffer[len + 1] = 0;
 							s_selectedBookIdx = 0;
 						}
+					}
+				}
+				if (ImGui::IsKeyPressed(ImGuiKey_Space, false))
+				{
+					int len = (int)strlen(s_searchBuffer);
+					if (len < (int)sizeof(s_searchBuffer) - 1)
+					{
+						s_searchBuffer[len] = ' ';
+						s_searchBuffer[len + 1] = 0;
+						s_selectedBookIdx = 0;
 					}
 				}
 				if (ImGui::IsKeyPressed(ImGuiKey_Backspace, false))
@@ -675,6 +707,7 @@ namespace CustomBooks
 
 		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
 		{
+			s_searchFocused = false;
 			CloseInventory();
 		}
 
@@ -762,6 +795,7 @@ namespace CustomBooks
 				if (book.config.hasIndex && !book.chapters.empty())
 				{
 					s_currentBook = bookName;
+					CloseInventory();
 					OpenIndex();
 				}
 			}
@@ -905,7 +939,8 @@ namespace CustomBooks
 				return;
 			}
 
-			int startLine = pageIdx * linesPerPage;
+			int startLine = pageIdx * linesPerPage - book.lazyStartLine;
+			if (startLine < 0 || startLine >= (int)wrappedLines.size()) return;
 			float ty = py;
 
 			int absLineOffset = book.lazyStartLine;
@@ -1128,7 +1163,18 @@ namespace CustomBooks
 						pageText += wrappedLines[startLine + l];
 					}
 
-					Sheets::StartRipPage(pageText, SheetDrawing(), s_cbSelectedPage, false, s_currentBook, 1);
+					std::string backText;
+					if (partner > 0 && !IsPageRipped(s_currentBook, partner))
+					{
+						int partnerStartLine = partner * linesPerPage;
+						for (int l = 0; l < linesPerPage && (partnerStartLine + l) < (int)wrappedLines.size(); ++l)
+						{
+							if (!backText.empty()) backText += "\n";
+							backText += wrappedLines[partnerStartLine + l];
+						}
+					}
+
+					Sheets::StartRipPage(pageText, SheetDrawing(), s_cbSelectedPage, false, s_currentBook, 1, backText, SheetDrawing());
 				}
 			}
 			else if (ImGui::IsKeyPressed(ImGuiKey_E, false))
@@ -1475,7 +1521,7 @@ namespace CustomBooks
 			{
 				int targetLine = book.chapters[s_selectedChapterIdx].lineIndex;
 				int linesPerPage = 12;
-				s_currentPage = targetLine / linesPerPage;
+				s_currentPage = targetLine / (linesPerPage * 2);
 
 				if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
 				{

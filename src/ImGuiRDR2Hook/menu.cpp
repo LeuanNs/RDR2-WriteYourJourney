@@ -548,7 +548,7 @@ namespace
 	{
 		if (!IsNightHour(s_worldHour.load()))
 			return 0;
-		return FadeCol(IM_COL32(120, 110, 95, 130), A);
+		return FadeCol(IM_COL32(80, 70, 55, 180), A);
 	}
 
 	void DrawRuledLines(ImDrawList* dl, const BookGeom& g,
@@ -1908,7 +1908,27 @@ namespace
 					sdl.brush = (int)line.brush;
 					sd.lines.push_back(sdl);
 				}
-				Sheets::StartRipPage(pb.text, sd, s_selectedPage, true, "", s_chapter.load());
+				
+				int partnerPage = Sheets::GetPartnerPage(s_selectedPage);
+				std::string backText;
+				SheetDrawing backDrawing;
+				if (partnerPage > 0 && !Sheets::IsPageRipped(partnerPage, true))
+				{
+					PageBuffer& partnerPb = GetPageBuffer(partnerPage);
+					PageDrawing& partnerPd = GetPageDrawing(partnerPage);
+					backText = partnerPb.text;
+					for (const auto& line : partnerPd.lines)
+					{
+						SheetDrawingLine sdl;
+						sdl.points = line.points;
+						sdl.color = line.color;
+						sdl.thickness = line.thickness;
+						sdl.brush = (int)line.brush;
+						backDrawing.lines.push_back(sdl);
+					}
+				}
+				
+				Sheets::StartRipPage(pb.text, sd, s_selectedPage, true, "", s_chapter.load(), backText, backDrawing);
 			}
 		}
 
@@ -1937,6 +1957,13 @@ void CImGuiMenu::Render()
 {
 	CustomBooks::HandleInput();
 	Sheets::HandleInput();
+
+	if (Sheets::IsShowingOverlay() || Sheets::IsAnimating() || Sheets::IsRipping())
+	{
+		Sheets::Render();
+		if (Sheets::IsShowingOverlay())
+			return;
+	}
 
 	if (CustomBooks::IsInventoryOpen() && !GetIsOpen())
 	{
