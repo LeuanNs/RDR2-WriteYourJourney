@@ -1,5 +1,6 @@
 #define NOMINMAX
 #include "sheets.h"
+#include "custombooks.h"
 #include "config.h"
 #include "imgui/imgui.h"
 #include <filesystem>
@@ -378,6 +379,9 @@ namespace Sheets
 		else
 		{
 			s_rippedCustomPages[s_ripCache.bookName].insert(page);
+			int linesPerPage = 12;
+			int lineIndex = page * linesPerPage;
+			CustomBooks::MarkChapterAsRipped(s_ripCache.bookName, lineIndex);
 		}
 
 		SaveRippedPagesIndex();
@@ -773,25 +777,38 @@ namespace Sheets
 
 		ImFont* df = ImGui::GetFont();
 		ImDrawList* dl = ImGui::GetBackgroundDrawList();
-		float w = std::min(200.f, ds.x * 0.15f);
-		float h = 7.f;
-		ImVec2 c(ds.x * 0.5f, ds.y - df->FontSize * 4.4f);
+		float w = std::min(320.f, ds.x * 0.25f);
+		float h = 12.f;
+		ImVec2 c(ds.x * 0.5f, ds.y - df->FontSize * 5.0f);
 		float progress = s_ripProgress / RIP_HOLD_TIME;
 
 		const char* msg = WJConfig::RippingProgress.c_str();
-		ImVec2 msz = df->CalcTextSizeA(df->FontSize, FLT_MAX, 0.f, msg);
-		dl->AddText({ c.x - msz.x * 0.5f, c.y - h - df->FontSize * 1.2f },
-			FadeCol(IM_COL32(228, 216, 192, 150), A), msg);
+		ImVec2 msz = df->CalcTextSizeA(df->FontSize * 1.3f, FLT_MAX, 0.f, msg);
+		dl->AddText(df, df->FontSize * 1.3f, { c.x - msz.x * 0.5f, c.y - h - df->FontSize * 2.0f },
+			FadeCol(IM_COL32(255, 230, 180, 255), A), msg);
+
+		dl->AddRectFilled({ c.x - w * 0.5f - 3.f, c.y - h * 0.5f - 3.f },
+			{ c.x + w * 0.5f + 3.f, c.y + h * 0.5f + 3.f },
+			FadeCol(IM_COL32(0, 0, 0, 200), A), 5.f);
 
 		dl->AddRectFilled({ c.x - w * 0.5f, c.y - h * 0.5f },
 			{ c.x + w * 0.5f, c.y + h * 0.5f },
-			FadeCol(IM_COL32(20, 14, 8, 190), A), 3.f);
+			FadeCol(IM_COL32(40, 30, 20, 220), A), 4.f);
+
 		if (progress > 0.01f)
-			dl->AddRectFilled({ c.x - w * 0.5f + 1.5f, c.y - h * 0.5f + 1.5f },
-				{ c.x - w * 0.5f + 1.5f + (w - 3.f) * progress, c.y + h * 0.5f - 1.5f },
-				FadeCol(IM_COL32(220, 188, 130, 255), A), 2.f);
+		{
+			float fillW = (w - 4.f) * progress;
+			dl->AddRectFilledMultiColor(
+				{ c.x - w * 0.5f + 2.f, c.y - h * 0.5f + 2.f },
+				{ c.x - w * 0.5f + 2.f + fillW, c.y + h * 0.5f - 2.f },
+				FadeCol(IM_COL32(255, 200, 80, 255), A),
+				FadeCol(IM_COL32(255, 180, 60, 255), A),
+				FadeCol(IM_COL32(255, 180, 60, 255), A),
+				FadeCol(IM_COL32(255, 200, 80, 255), A));
+		}
+
 		dl->AddRect({ c.x - w * 0.5f, c.y - h * 0.5f }, { c.x + w * 0.5f, c.y + h * 0.5f },
-			FadeCol(IM_COL32(206, 172, 126, 140), A), 3.f, 0, 1.f);
+			FadeCol(IM_COL32(255, 215, 100, 220), A), 4.f, 0, 2.5f);
 	}
 
 	static void DrawRipAnimation(const ImVec2 ds, float A)

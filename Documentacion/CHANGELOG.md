@@ -66,6 +66,64 @@
 
 ---
 
+## [Idea 2 - Mejoras Sheets + Index CustomBooks] - 2026-09-02
+
+### Mejoras en Sistema de Hojas Arrancadas
+
+**Barra de progreso mejorada:**
+- Barra de rip (P hold 3s) ahora es mas visible: 320px ancho x 12px alto (antes 200px x 7px)
+- Texto "Ripping page..." mas grande (1.3x font size) y mas brillante (255,230,180)
+- Fondo oscuro con borde redondeado (5px) para mejor contraste
+- Barra de progreso con gradiente dorado (255,200,80 -> 255,180,60)
+- Borde exterior mas grueso (2.5px) y brillante (255,215,100)
+
+**Integracion con CustomBooks Index:**
+- Al arrancar pagina de CustomBook, se marca capitulo correspondiente como "Ripped Sheet" en index.json
+- Funcion `CustomBooks::MarkChapterAsRipped(bookName, lineIndex)` actualiza titulo del capitulo y reescribe index.json
+- Funcion `CustomBooks::GetNextValidLineIndex(bookName, lineIndex)` para saltar capitulos ripped
+
+### Nuevo Sistema: Index de CustomBooks
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/custombooks.h` - Nuevas funciones: OpenIndex(), CloseIndex(), IsIndexOpen(), RenderIndex(), MarkChapterAsRipped(), GetNextValidLineIndex()
+- `src/ImGuiRDR2Hook/custombooks.cpp` - Implementacion completa del Index (~150 lineas)
+- `src/ImGuiRDR2Hook/menu.cpp` - Integracion de CustomBooks::IsIndexOpen() y RenderIndex() en Render()
+- `src/ImGuiRDR2Hook/config.h` - Nueva clave: Sheet_RippedChapter="Ripped Sheet"
+- `src/ImGuiRDR2Hook/sheets.cpp` - Include custombooks.h, llamada a MarkChapterAsRipped() en ConfirmRip()
+
+**Flujo del Index:**
+
+1. **Acceso al Index:**
+   - En satchel de CustomBooks, si el libro tiene `hasIndex=1` y capitulos definidos, se muestra "I: Index" junto a "K: Bookmark | R: Random Page"
+   - Presionar I abre el Index
+
+2. **Vista del Index:**
+   - Pantalla completa con fondo oscuro (10,8,5,230 alpha)
+   - Titulo "Index" centrado arriba (2x font size, color dorado 230,205,160)
+   - Lista de capitulos centrados verticalmente
+   - Capitulo seleccionado: texto dorado (255,215,0) y mas grande (1.3x)
+   - Otros capitulos: texto crema (200,180,140) y tamaño normal (1.1x)
+   - Navegacion con flechas arriba/abajo
+   - Enter para ir al capitulo seleccionado
+   - ESC para cerrar Index
+
+3. **Navegacion automatica:**
+   - Al presionar Enter en un capitulo, se calcula la pagina: `s_currentPage = targetLine / linesPerPage`
+   - Se cierra el Index automaticamente y se muestra el libro en esa pagina
+   - Si el capitulo fue arrancado (titulo contiene "Ripped Sheet"), igual se puede navegar a el
+
+4. **Persistencia de capitulos arrancados:**
+   - Al arrancar pagina de CustomBook, se llama `MarkChapterAsRipped(bookName, lineIndex)`
+   - Busca el capitulo con `lineIndex` coincidente
+   - Cambia titulo a "Ripped Sheet (TituloOriginal)"
+   - Reescribe `index.json` con el nuevo titulo
+   - Al reabrir el libro, el capitulo arrancado aparece como "Ripped Sheet" en el Index
+
+**Localizacion nueva (INI):**
+- Sheet_RippedChapter="Ripped Sheet" (texto que se agrega al titulo del capitulo arrancado)
+
+---
+
 ## [Última Build] - 2026-09-02
 
 ### Cambios en Journal (Diario Principal)
