@@ -1,5 +1,152 @@
 # Changelog - Write Your Journey
 
+## [Build - Fixes Masivos Sheets + CustomBooks] - 2026-09-02
+
+### Fixes en Sistema de Sheets (Hojas Arrancadas)
+
+**Fix 1/15: Ghost rendering al restaurar pagina con ESC**
+- `RestorePage()` ahora restaura TAMBIEN la pagina partner (la de atras)
+- Antes solo borraba la pagina fuente del set de ripped, dejando la partner marcada
+- Formula de partner corregida: par N → N+1, impar N>1 → N-1
+
+**Fix 2: Pickup con tecla E - visual de teclado + barra de hold**
+- Reemplazado texto "Press E to pick it up" por un cuadrado con la letra "E" (simula tecla de teclado RDR2)
+- Al mantener E, una barra blanca se llena alrededor del cuadrado (3 segundos)
+- Si el jugador se mueve mientras mantiene E, la accion se cancela
+- Si el jugador se mueve mientras el personaje camina hacia la sheet, la accion se cancela
+- Al completar la barra, el texto desaparece completamente
+
+**Fix 3: Distancia de pickup reducida a 5m**
+- `PICKUP_PROMPT_RADIUS` y `PICKUP_RADIUS_DEFAULT` ahora son 5.0 (antes 10.0)
+
+**Fix 4: Animacion de crouch al llegar a la sheet**
+- Al llegar a la coordenada, el personaje se agacha (animacion `amb_rest@world_human_bottle_pickup`)
+- Solo al terminar la animacion de crouch, se muestra la hoja
+- Cuando se muestra la hoja, se bloquea control completo + HUD + camara
+
+**Fix 8: Overlay no solapa texto de paginas no arrancadas**
+- Al mostrar overlay de hoja arrancada, se deja de renderizar previews de paginas del journal
+- El libro se ve detras (fondo), pero sin texto de paginas solapado
+
+**Fix 9: Visual de pagina arrancada mejorado**
+- Paginas ripeadas muestran glow pulsante (azul) como pista visual de que falta una hoja
+- Texto "Page Ripped" ahora es configurable via INI: `Sheet_PageRipped`
+- Bloqueo de seleccion: no se puede seleccionar una pagina ripped directamente
+- Solo se puede acceder a la siguiente pagina no-ripped pasando con flechas
+
+**Fix 10: Bookmark text position**
+- "Bookmark Saved / Deleted" bajado 6px mas en el journal (de +5f a +11f)
+
+**Fix 11: Pagina arrancada incluye frente + trasera correcta**
+- `GetPartnerPage()` implementado: par N → N+1, impar N>1 → N-1
+- Al rippear pagina 6, la 7 (trasera) tambien se marca como ripped
+- Al rippear pagina 50, la 51 (trasera) tambien se marca como ripped
+- `RestorePage()` restaura ambas paginas (fuente + partner)
+
+**Fix 12: R: Mirar atras - animacion 3D de giro**
+- En overlay de hoja arrancada, "R: Look Behind" disponible
+- Al presionar R, animacion de giro 3D (escala horizontal coseno, 0.8s)
+- Muestra el contenido de la pagina trasera (backText/backDrawing)
+- Si la pagina trasera esta vacia, no se muestra la opcion
+
+**Fix 13: K: Keep the Sheet**
+- En overlay de discoverable, "K: Keep the Sheet" disponible
+- Al presionar K: overlay desaparece, control vuelve al jugador
+- Sheet se marca como "Collected=1" en location.ini
+- El sistema la ignora en futuras busquedas
+
+**Fix 14: Remover textos "Empty Page" / "Nothing written"**
+- Eliminado texto "(empty page)" del overlay de sheets
+- Eliminado texto "Empty_Page" del journal (DrawReadPage)
+- Si no hay contenido, simplemente no se muestra nada
+
+### Fixes en CustomBooks
+
+**Fix 5: Index apertura instantanea + estilo de pagina de libro**
+- Al presionar I en satchel, el Index se abre inmediatamente (sin esperar ENTER)
+- Index ahora se dibuja como una pagina del mismo libro (mismo cover, pergamino, spine)
+- Capitulos listados con highlight sutil en la seleccion
+
+**Fix 6/7: Lazy loading para TODAS las paginas + navegacion forward**
+- `OpenBook()` ahora cuenta lineas totales leyendo el archivo completo
+- `RenderBook()` trigger de lazy loading basado en posicion absoluta (targetLine)
+- Navegacion forward arreglada: usa `lazyTotalLines` para limites en vez de chunk cargado
+- Al saltar a pagina via Index, se carga el chunk correcto inmediatamente
+- Libros largos (Biblia) ahora navegan correctamente hacia adelante Y atras
+
+### Nuevas claves de localizacion (INI)
+- `Sheet_PageRipped` - Texto al seleccionar pagina arrancada (default: "Page Ripped")
+- `Sheet_KeepSheet` - Texto para mantener hoja (default: "K: Keep the Sheet")
+- `Sheet_LookBehind` - Texto para mirar atras (default: "R: Look Behind")
+
+### Archivos modificados
+- `src/ImGuiRDR2Hook/sheets.h` - Nuevas declaraciones: GetPartnerPage, EHold, Crouch, Flip, Keep, Collected tracking
+- `src/ImGuiRDR2Hook/sheets.cpp` - Reescrito con todos los fixes (~900 lineas)
+- `src/ImGuiRDR2Hook/menu.cpp` - Fix overlay overlap, glow ripped pages, bookmark position, remove empty text
+- `src/ImGuiRDR2Hook/custombooks.cpp` - Fix lazy loading, forward nav, index as book page
+- `src/ImGuiRDR2Hook/script.cpp` - E hold logic, crouch anim, movement cancel, control block
+- `src/ImGuiRDR2Hook/config.h` - Nuevas claves de localizacion
+
+### Checklist de Testing
+
+#### Sheets - Fixes principales
+- [ ] Rippear pag 3, presionar ESC para restaurar -> navegar a pag 7/8 -> pag 7 NO debe mostrar contenido de pag 3
+- [ ] Rippear pag 2 -> pag 3 tambien debe desaparecer (misma hoja fisica)
+- [ ] Rippear pag 6 -> pag 7 tambien debe desaparecer (trasera de la misma hoja)
+- [ ] Rippear pag 50 -> pag 51 tambien debe desaparecer
+- [ ] Al restaurar pag 3 con ESC -> pag 2 (o 4) tambien debe restaurarse
+- [ ] Al mostrar overlay de hoja arrancada -> el texto de las otras paginas del journal NO debe verse solapado
+- [ ] Paginas ripeadas deben mostrar glow pulsante azul como pista visual
+- [ ] Click en pagina ripped -> muestra "Page Ripped" (texto configurable en INI)
+- [ ] No se puede seleccionar directamente una pagina ripped (solo navegar con flechas)
+
+#### Sheets - Pickup con E
+- [ ] Acercarse a sheet a 5m -> aparece cuadrado con "E" (no texto "Press E...")
+- [ ] Mantener E -> barra blanca se llena alrededor del cuadrado (3s)
+- [ ] Soltar E antes de 3s -> barra se cancela, no pasa nada
+- [ ] Moverse mientras se mantiene E -> accion se cancela
+- [ ] Completar barra E -> personaje camina hacia la sheet
+- [ ] Moverse mientras personaje camina -> accion se cancela, hoja no se muestra
+- [ ] Al llegar -> personaje se agacha (animacion crouch)
+- [ ] Al terminar crouch -> hoja se muestra + controles/HUD/camara bloqueados
+- [ ] Al completar E hold -> texto de "hay una hoja cerca" desaparece completamente
+
+#### Sheets - Overlay mejorado
+- [ ] En overlay de hoja arrancada -> "R: Look Behind" visible si hay contenido atras
+- [ ] Presionar R -> animacion 3D de giro (escala horizontal)
+- [ ] Al terminar giro -> muestra contenido de la pagina trasera
+- [ ] Presionar R de nuevo -> gira de vuelta al frente
+- [ ] En overlay de discoverable -> "K: Keep the Sheet" visible
+- [ ] Presionar K -> overlay desaparece, control vuelve al jugador
+- [ ] Despues de K -> sheet marcada como collected en location.ini
+- [ ] Volver a pasar por el mismo lugar -> sheet NO aparece (ya fue recogida)
+- [ ] Si pagina esta vacia -> NO se muestra "(empty page)" ni ningun texto
+
+#### CustomBooks - Index
+- [ ] En satchel con libro seleccionado -> presionar I -> Index se abre inmediatamente (sin ENTER)
+- [ ] Index se ve como pagina del mismo libro (cover, pergamino, spine)
+- [ ] Flechas arriba/abajo -> navega entre capitulos
+- [ ] Enter en capitulo -> cierra Index, abre libro en esa pagina
+- [ ] Abrir capitulo en pagina 940 -> lazy loading carga chunk correcto desde pag 940
+
+#### CustomBooks - Lazy Loading
+- [ ] Abrir Biblia NT 1858 -> navegar hacia adelante sin problemas
+- [ ] Llegar a pag 58+ -> texto sigue renderizando (no se corta)
+- [ ] Navegar hacia atras y adelante -> chunks se cargan correctamente
+- [ ] Abrir libro grande en pagina aleatoria (R) -> lazy loading funciona desde esa pagina
+
+#### Journal - Bookmark
+- [ ] "Bookmark Saved / Deleted" aparece 6px mas abajo que antes (solo en journal)
+
+#### General
+- [ ] Journal sigue funcionando correctamente
+- [ ] CustomBooks siguen funcionando correctamente
+- [ ] No hay conflictos de teclas
+- [ ] Alt+Tab cierra todo sin crash
+- [ ] Recibir dano cierra todo sin crash
+
+---
+
 ## [Idea 2 - Sheets/Discoverables] - 2026-09-02
 
 ### Nuevo Sistema: Hojas Arrancadas / Discoverables (Sheets)

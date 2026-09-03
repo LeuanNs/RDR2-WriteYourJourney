@@ -20,6 +20,11 @@ namespace Sheets
 	static constexpr uint32_t SHEET_DRAWING_MAGIC = 0x574A4402;
 	static constexpr float RIP_HOLD_TIME = 3.0f;
 	static constexpr float RIP_ANIM_DURATION = 0.9f;
+	static constexpr float E_HOLD_TIME = 3.0f;
+	static constexpr float FLIP_ANIM_DURATION = 0.8f;
+	static constexpr float CROUCH_DURATION_MS = 1200.f;
+	static constexpr float PICKUP_RADIUS_DEFAULT = 5.f;
+	static constexpr float PICKUP_PROMPT_RADIUS = 5.f;
 
 	static std::atomic<float> s_playerX{ 0.f };
 	static std::atomic<float> s_playerY{ 0.f };
@@ -37,6 +42,11 @@ namespace Sheets
 	static int s_viewingSheetId = -1;
 	static RippedSheetCache s_overlayCache;
 
+	static bool s_showingBack = false;
+	static bool s_flipAnimating = false;
+	static float s_flipAnimT = 0.f;
+	static bool s_flipToFront = false;
+
 	static std::unordered_set<int> s_rippedJournalPages;
 	static std::unordered_map<std::string, std::unordered_set<int>> s_rippedCustomPages;
 
@@ -50,6 +60,20 @@ namespace Sheets
 	static float s_walkTargetX = 0.f, s_walkTargetY = 0.f, s_walkTargetZ = 0.f;
 	static int s_walkTargetId = -1;
 	static DWORD s_walkStartMs = 0;
+	static float s_walkStartPX = 0.f, s_walkStartPY = 0.f, s_walkStartPZ = 0.f;
+
+	static bool s_eHoldActive = false;
+	static float s_eHoldProgress = 0.f;
+	static int s_eHoldSheetId = -1;
+	static bool s_eHoldComplete = false;
+
+	static bool s_crouching = false;
+	static DWORD s_crouchStartMs = 0;
+
+	static bool s_sheetKept = false;
+	static bool s_sheetViewed = false;
+
+	static std::unordered_set<int> s_collectedSheets;
 
 	static std::mutex s_sheetsMutex;
 
@@ -69,6 +93,14 @@ namespace Sheets
 		if (a == std::string::npos) return "";
 		size_t b = s.find_last_not_of(" \t\r\n");
 		return s.substr(a, b - a + 1);
+	}
+
+	int GetPartnerPage(int page)
+	{
+		if (page <= 0) return 0;
+		if (page % 2 == 0) return page + 1;
+		if (page > 1) return page - 1;
+		return 0;
 	}
 
 	static void SaveDrawingToFile(const fs::path& path, const SheetDrawing& sd)
@@ -186,6 +218,11 @@ namespace Sheets
 			else if (key == "PickupMessage") sheet.pickupMessage = val;
 			else if (key == "Author") sheet.author = val;
 			else if (key == "Source") sheet.source = val;
+			else if (key == "OriginalPage") sheet.originalPage = std::stoi(val);
+			else if (key == "FromJournal") sheet.fromJournal = (val == "1");
+			else if (key == "BookName") sheet.bookName = val;
+			else if (key == "Chapter") sheet.chapter = std::stoi(val);
+			else if (key == "Collected") sheet.collected = (val == "1");
 		}
 	}
 
@@ -215,7 +252,14 @@ namespace Sheets
 
 			DiscoverableSheet sheet;
 			sheet.id = id;
+			sheet.radius = PICKUP_RADIUS_DEFAULT;
 			ParseLocationIni(locPath, sheet);
+
+			if (sheet.collected)
+			{
+				s_collectedSheets.insert(id);
+				continue;
+			}
 
 			fs::path textPath = entry.path() / "sheet.txt";
 			if (fs::exists(textPath))
@@ -232,6 +276,22 @@ namespace Sheets
 			fs::path drawPath = entry.path() / "sheet_draw.dat";
 			if (fs::exists(drawPath))
 				sheet.drawing = LoadDrawingFromFile(drawPath);
+
+			fs::path backTextPath = entry.path() / "sheet_back.txt";
+			if (fs::exists(backTextPath))
+			{
+				std::ifstream tf(backTextPath);
+				if (tf)
+				{
+					std::ostringstream ss;
+					ss << tf.rdbuf();
+					sheet.backText = ss.str();
+				}
+			}
+
+			fs::path backDrawPath = entry.path() / "sheet_back_draw.dat";
+			if (fs::exists(backDrawPath))
+				sheet.backDrawing = LoadDrawingFromFile(backDrawPath);
 
 			if (sheet.pickupMessage.empty())
 				sheet.pickupMessage = WJConfig::Sheet_PressE;
@@ -262,6 +322,8 @@ namespace Sheets
 		s_viewingDiscoverable = false;
 		s_viewingSheetId = -1;
 		s_overlayCache = RippedSheetCache();
+		s_showingBack = false;
+		s_flipAnimating = false;
 	}
 	int GetRipSourcePage() { return s_ripCache.sourcePage; }
 	bool GetRipFromJournal() { return s_ripCache.fromJournal; }
@@ -293,6 +355,65 @@ namespace Sheets
 
 	bool IsWalkingToSheet() { return s_walkingToSheet; }
 
+	float GetEHoldProgress() { return s_eHoldProgress; }
+	bool IsEHoldActive() { return s_eHoldActive; }
+	bool IsEHoldComplete() { return s_eHoldComplete; }
+	bool IsCrouching() { return s_crouching; }
+	bool IsFlipAnimating() { return s_flipAnimating; }
+	float GetFlipAnimT() { return s_flipAnimT; }
+	bool IsShowingBack() { return s_showingBack; }
+	bool IsSheetKept() { return s_sheetKept; }
+	bool WasSheetViewed() { return s_sheetViewed; }
+	void SetSheetViewed(bool v) { s_sheetViewed = v; }
+
+	void StartEHold()
+	{
+		if (s_nearbySheetId < 0) return;
+		s_eHoldActive = true;
+		s_eHoldProgress = 0.f;
+		s_eHoldSheetId = s_nearbySheetId;
+		s_eHoldComplete = false;
+	}
+
+	void CancelEHold()
+	{
+		s_eHoldActive = false;
+		s_eHoldProgress = 0.f;
+		s_eHoldSheetId = -1;
+		s_eHoldComplete = false;
+	}
+
+	void StartCrouch()
+	{
+		s_crouching = true;
+		s_crouchStartMs = GetTickCount();
+	}
+
+	bool UpdateCrouch()
+	{
+		if (!s_crouching) return false;
+		DWORD elapsed = GetTickCount() - s_crouchStartMs;
+		if (elapsed >= (DWORD)CROUCH_DURATION_MS)
+		{
+			s_crouching = false;
+			return true;
+		}
+		return false;
+	}
+
+	void StartFlipAnim()
+	{
+		if (s_flipAnimating) return;
+		s_flipAnimating = true;
+		s_flipAnimT = 0.f;
+		s_flipToFront = s_showingBack;
+	}
+
+	void ToggleBackSide()
+	{
+		s_showingBack = !s_showingBack;
+	}
+
 	void GetNearbySheetCoords(float& x, float& y, float& z)
 	{
 		std::lock_guard<std::mutex> lock(s_sheetsMutex);
@@ -321,6 +442,9 @@ namespace Sheets
 				s_walkTargetId = s.id;
 				s_walkingToSheet = true;
 				s_walkStartMs = GetTickCount();
+				s_walkStartPX = s_playerX.load();
+				s_walkStartPY = s_playerY.load();
+				s_walkStartPZ = s_playerZ.load();
 				break;
 			}
 		}
@@ -335,12 +459,22 @@ namespace Sheets
 	bool UpdateWalk(float px, float py, float pz)
 	{
 		if (!s_walkingToSheet) return false;
+		float dxStart = px - s_walkStartPX;
+		float dyStart = py - s_walkStartPY;
+		float dzStart = pz - s_walkStartPZ;
+		float playerMoved = std::sqrt(dxStart * dxStart + dyStart * dyStart + dzStart * dzStart);
+		if (playerMoved > 2.0f)
+		{
+			s_walkingToSheet = false;
+			s_walkTargetId = -1;
+			return false;
+		}
 		float dx = px - s_walkTargetX;
 		float dy = py - s_walkTargetY;
 		float dz = pz - s_walkTargetZ;
 		float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
 		DWORD elapsed = GetTickCount() - s_walkStartMs;
-		if (dist < 1.2f || elapsed > 5000)
+		if (dist < 1.2f || elapsed > 8000)
 		{
 			s_walkingToSheet = false;
 			return true;
@@ -357,6 +491,9 @@ namespace Sheets
 		s_ripCache.fromJournal = fromJournal;
 		s_ripCache.bookName = bookName;
 		s_ripCache.chapter = chapter;
+		s_ripCache.backText = "";
+		s_ripCache.backDrawing = SheetDrawing();
+		s_ripCache.backPage = 0;
 		s_ripping = true;
 		s_ripProgress = 0.f;
 	}
@@ -366,19 +503,18 @@ namespace Sheets
 		if (!s_ripping && !s_ripAnimating) return;
 
 		int page = s_ripCache.sourcePage;
+		int partner = GetPartnerPage(page);
+		s_ripCache.backPage = partner;
+
 		if (s_ripCache.fromJournal)
 		{
 			s_rippedJournalPages.insert(page);
-			int partner = 0;
-			if (page == 2) partner = 3;
-			else if (page == 3) partner = 2;
-			else if (page % 2 == 0 && page >= 4) partner = page + 1;
-			else if (page % 2 == 1 && page >= 5) partner = page - 1;
 			if (partner > 0) s_rippedJournalPages.insert(partner);
 		}
 		else
 		{
 			s_rippedCustomPages[s_ripCache.bookName].insert(page);
+			if (partner > 0) s_rippedCustomPages[s_ripCache.bookName].insert(partner);
 			int linesPerPage = 12;
 			int lineIndex = page * linesPerPage;
 			CustomBooks::MarkChapterAsRipped(s_ripCache.bookName, lineIndex);
@@ -395,6 +531,9 @@ namespace Sheets
 		s_showingOverlay = true;
 		s_viewingDiscoverable = false;
 		s_viewingSheetId = -1;
+		s_showingBack = false;
+		s_flipAnimating = false;
+		s_sheetViewed = false;
 	}
 
 	void CancelRip()
@@ -411,18 +550,89 @@ namespace Sheets
 		if (!s_showingOverlay || s_viewingDiscoverable) return;
 
 		int page = s_overlayCache.sourcePage;
+		int partner = GetPartnerPage(page);
 		if (s_overlayCache.fromJournal)
+		{
 			s_rippedJournalPages.erase(page);
+			if (partner > 0) s_rippedJournalPages.erase(partner);
+		}
 		else
 		{
 			auto it = s_rippedCustomPages.find(s_overlayCache.bookName);
 			if (it != s_rippedCustomPages.end())
+			{
 				it->second.erase(page);
+				if (partner > 0) it->second.erase(partner);
+			}
 		}
 
 		SaveRippedPagesIndex();
 		s_showingOverlay = false;
 		s_overlayCache = RippedSheetCache();
+		s_showingBack = false;
+		s_flipAnimating = false;
+	}
+
+	void KeepSheet()
+	{
+		if (!s_showingOverlay) return;
+
+		if (s_viewingDiscoverable && s_viewingSheetId >= 0)
+		{
+			MarkSheetCollected(s_viewingSheetId);
+
+			std::lock_guard<std::mutex> lock(s_sheetsMutex);
+			for (auto& sheet : s_discoverableSheets)
+			{
+				if (sheet.id == s_viewingSheetId)
+				{
+					fs::path dir = GetDiscoverablesDir() / ("SHEET" + std::to_string(sheet.id));
+					fs::path locPath = dir / "location.ini";
+					if (fs::exists(locPath))
+					{
+						std::ifstream in(locPath);
+						std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+						in.close();
+						size_t pos = content.find("Collected=");
+						if (pos != std::string::npos)
+						{
+							size_t endLine = content.find('\n', pos);
+							if (endLine != std::string::npos)
+								content.replace(pos, endLine - pos, "Collected=1");
+							else
+								content.replace(pos, content.size() - pos, "Collected=1");
+						}
+						else
+						{
+							content += "\nCollected=1\n";
+						}
+						std::ofstream out(locPath, std::ios::trunc);
+						if (out) out << content;
+					}
+					sheet.collected = true;
+					break;
+				}
+			}
+		}
+
+		s_sheetKept = true;
+		s_showingOverlay = false;
+		s_viewingDiscoverable = false;
+		s_viewingSheetId = -1;
+		s_overlayCache = RippedSheetCache();
+		s_showingBack = false;
+		s_flipAnimating = false;
+		s_showPickupPrompt = false;
+	}
+
+	void MarkSheetCollected(int sheetId)
+	{
+		s_collectedSheets.insert(sheetId);
+	}
+
+	bool IsSheetCollected(int sheetId)
+	{
+		return s_collectedSheets.count(sheetId) > 0;
 	}
 
 	void LeaveSheetAtPlayer()
@@ -449,13 +659,17 @@ namespace Sheets
 				loc << "X=" << px << "\n";
 				loc << "Y=" << py << "\n";
 				loc << "Z=" << pz << "\n";
-				loc << "PickupRadius=10.0\n";
+				loc << "PickupRadius=" << PICKUP_RADIUS_DEFAULT << "\n";
 				loc << "PickupMessage=" << WJConfig::Sheet_PressE << "\n";
 				loc << "Author=Player\n";
 				if (s_overlayCache.fromJournal)
 					loc << "Source=Journal\n";
 				else
 					loc << "Source=CustomBook:" << s_overlayCache.bookName << "\n";
+				loc << "OriginalPage=" << s_overlayCache.sourcePage << "\n";
+				loc << "FromJournal=" << (s_overlayCache.fromJournal ? "1" : "0") << "\n";
+				loc << "BookName=" << s_overlayCache.bookName << "\n";
+				loc << "Chapter=" << s_overlayCache.chapter << "\n";
 			}
 		}
 
@@ -467,8 +681,18 @@ namespace Sheets
 		if (!s_overlayCache.drawing.lines.empty())
 			SaveDrawingToFile(sheetDir / "sheet_draw.dat", s_overlayCache.drawing);
 
+		if (!s_overlayCache.backText.empty())
+		{
+			std::ofstream btxt(sheetDir / "sheet_back.txt");
+			if (btxt) btxt << s_overlayCache.backText;
+		}
+
+		if (!s_overlayCache.backDrawing.lines.empty())
+			SaveDrawingToFile(sheetDir / "sheet_back_draw.dat", s_overlayCache.backDrawing);
+
 		s_showingOverlay = false;
 		s_overlayCache = RippedSheetCache();
+		s_showingBack = false;
 
 		ScanSheets();
 	}
@@ -482,11 +706,12 @@ namespace Sheets
 		for (const auto& sheet : s_discoverableSheets)
 		{
 			if (sheet.collected) continue;
+			if (IsSheetCollected(sheet.id)) continue;
 			float dx = px - sheet.x;
 			float dy = py - sheet.y;
 			float dz = pz - sheet.z;
 			float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-			if (dist <= sheet.radius)
+			if (dist <= PICKUP_PROMPT_RADIUS)
 			{
 				s_nearbySheetId = sheet.id;
 				s_showPickupPrompt = true;
@@ -509,19 +734,26 @@ namespace Sheets
 			float px = s_playerX.load(), py = s_playerY.load(), pz = s_playerZ.load();
 			float dx = px - sheet.x, dy = py - sheet.y, dz = pz - sheet.z;
 			float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-			if (dist > sheet.radius) return false;
+			if (dist > sheet.radius + 2.f) return false;
 
 			s_overlayCache.text = sheet.text;
 			s_overlayCache.drawing = sheet.drawing;
-			s_overlayCache.sourcePage = 0;
-			s_overlayCache.fromJournal = false;
-			s_overlayCache.bookName = "";
-			s_overlayCache.chapter = 0;
+			s_overlayCache.sourcePage = sheet.originalPage;
+			s_overlayCache.fromJournal = sheet.fromJournal;
+			s_overlayCache.bookName = sheet.bookName;
+			s_overlayCache.chapter = sheet.chapter;
+			s_overlayCache.backText = sheet.backText;
+			s_overlayCache.backDrawing = sheet.backDrawing;
+			s_overlayCache.backPage = GetPartnerPage(sheet.originalPage);
 
 			s_showingOverlay = true;
 			s_viewingDiscoverable = true;
 			s_viewingSheetId = sheet.id;
 			s_showPickupPrompt = false;
+			s_showingBack = false;
+			s_flipAnimating = false;
+			s_sheetViewed = false;
+			s_sheetKept = false;
 			return true;
 		}
 		return false;
@@ -557,6 +789,18 @@ namespace Sheets
 			return;
 		}
 
+		if (s_flipAnimating)
+		{
+			s_flipAnimT += ImGui::GetIO().DeltaTime;
+			if (s_flipAnimT >= FLIP_ANIM_DURATION)
+			{
+				s_flipAnimating = false;
+				s_flipAnimT = 0.f;
+				ToggleBackSide();
+			}
+			return;
+		}
+
 		if (s_showingOverlay)
 		{
 			if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
@@ -567,6 +811,9 @@ namespace Sheets
 					s_viewingDiscoverable = false;
 					s_viewingSheetId = -1;
 					s_overlayCache = RippedSheetCache();
+					s_showingBack = false;
+					s_flipAnimating = false;
+					s_sheetViewed = true;
 				}
 				else
 				{
@@ -577,6 +824,44 @@ namespace Sheets
 			{
 				if (!s_viewingDiscoverable)
 					LeaveSheetAtPlayer();
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_R, false))
+			{
+				if (!s_flipAnimating)
+				{
+					bool hasBack = s_showingBack ?
+						(!s_overlayCache.text.empty() || !s_overlayCache.drawing.lines.empty()) :
+						(!s_overlayCache.backText.empty() || !s_overlayCache.backDrawing.lines.empty());
+					if (hasBack)
+						StartFlipAnim();
+				}
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_K, false))
+			{
+				if (s_viewingDiscoverable)
+				{
+					KeepSheet();
+				}
+			}
+			return;
+		}
+
+		if (s_eHoldActive)
+		{
+			bool eDown = (GetAsyncKeyState('E') & 0x8000) != 0;
+			if (eDown)
+			{
+				s_eHoldProgress += ImGui::GetIO().DeltaTime;
+				if (s_eHoldProgress >= E_HOLD_TIME)
+				{
+					s_eHoldComplete = true;
+					s_eHoldActive = false;
+					s_showPickupPrompt = false;
+				}
+			}
+			else
+			{
+				CancelEHold();
 			}
 			return;
 		}
@@ -630,55 +915,13 @@ namespace Sheets
 		dl->AddPolyline(pts.data(), (int)pts.size(), col, ImDrawFlags_None, 1.5f);
 	}
 
-	static void DrawRippedPageOverlay(const ImVec2 ds, float A)
+	static void DrawSheetContent(ImDrawList* dl, ImFont* f, const std::string& text, const SheetDrawing& drawing,
+		ImVec2 mn, ImVec2 mx, float w, float h, float A, bool showEmpty)
 	{
-		ImDrawList* dl = ImGui::GetBackgroundDrawList();
-		ImFont* f = ImGui::GetIO().Fonts->Fonts.Size > 1 ? ImGui::GetIO().Fonts->Fonts[1] : ImGui::GetFont();
-
-		dl->AddRectFilled({ 0, 0 }, ds, IM_COL32(0, 0, 0, (int)(120.f * A)));
-
-		float w = ds.x * 0.5f;
-		float h = ds.y * 0.78f;
-		ImVec2 mn{ (ds.x - w) * 0.5f, (ds.y - h) * 0.5f };
-		ImVec2 mx{ mn.x + w, mn.y + h };
-
-		unsigned seed = 4242u;
-		float jag = 6.f;
-
-		std::vector<ImVec2> poly;
-		poly.push_back(mn);
-		float step = 12.f;
-		for (float x = mn.x + step; x < mx.x; x += step)
-		{
-			float jy = mn.y + (Rng(seed) - 0.5f) * jag;
-			poly.push_back({ x, jy });
-		}
-		poly.push_back({ mx.x, mn.y });
-		for (float y = mn.y + step; y < mx.y; y += step)
-		{
-			float jx = mx.x + (Rng(seed) - 0.5f) * jag;
-			poly.push_back({ jx, y });
-		}
-		poly.push_back({ mx.x, mx.y });  
-		for (float x = mx.x - step; x > mn.x; x -= step)
-		{
-			float jy = mx.y + (Rng(seed) - 0.5f) * jag;
-			poly.push_back({ x, jy });
-		}
-		poly.push_back(mn);
-		for (float y = mx.y - step; y > mn.y; y -= step)
-		{
-			float jx = mn.x + (Rng(seed) - 0.5f) * jag;
-			poly.push_back({ jx, y });
-		}
-
-		dl->AddConvexPolyFilled(poly.data(), (int)poly.size(), FadeCol(IM_COL32(210, 200, 175, 255), A));
-		dl->AddPolyline(poly.data(), (int)poly.size(), FadeCol(IM_COL32(160, 140, 110, 200), A), ImDrawFlags_None, 1.5f);
-
-		if (!s_overlayCache.drawing.lines.empty())
+		if (!drawing.lines.empty())
 		{
 			dl->PushClipRect(mn, mx, true);
-			for (const auto& line : s_overlayCache.drawing.lines)
+			for (const auto& line : drawing.lines)
 			{
 				if (line.points.size() < 2) continue;
 				for (size_t i = 1; i < line.points.size(); ++i)
@@ -701,15 +944,13 @@ namespace Sheets
 
 		dl->PushClipRect(mn, mx, true);
 
-		if (s_overlayCache.text.empty())
+		if (text.empty())
 		{
-			const char* emptyMsg = "(empty page)";
-			ImVec2 msz = f->CalcTextSizeA(fontSize, FLT_MAX, 0.f, emptyMsg);
-			dl->AddText(f, fontSize, { mn.x + (w - msz.x) * 0.5f, mn.y + (h - msz.y) * 0.5f }, FadeCol(IM_COL32(76, 62, 48, 200), A), emptyMsg);
+			// Fix 14: Don't show "empty page" text
 		}
 		else
 		{
-			std::istringstream stream(s_overlayCache.text);
+			std::istringstream stream(text);
 			std::string rawLine;
 			while (std::getline(stream, rawLine))
 			{
@@ -751,6 +992,81 @@ namespace Sheets
 			}
 		}
 		dl->PopClipRect();
+	}
+
+	static void DrawRippedPageOverlay(const ImVec2 ds, float A)
+	{
+		ImDrawList* dl = ImGui::GetBackgroundDrawList();
+		ImFont* f = ImGui::GetIO().Fonts->Fonts.Size > 1 ? ImGui::GetIO().Fonts->Fonts[1] : ImGui::GetFont();
+
+		dl->AddRectFilled({ 0, 0 }, ds, IM_COL32(0, 0, 0, (int)(120.f * A)));
+
+		float w = ds.x * 0.5f;
+		float h = ds.y * 0.78f;
+		ImVec2 mn{ (ds.x - w) * 0.5f, (ds.y - h) * 0.5f };
+		ImVec2 mx{ mn.x + w, mn.y + h };
+
+		float flipScale = 1.f;
+		if (s_flipAnimating)
+		{
+			float t = s_flipAnimT / FLIP_ANIM_DURATION;
+			if (t > 1.f) t = 1.f;
+			flipScale = std::abs(std::cos(t * 3.14159f));
+			if (flipScale < 0.02f) flipScale = 0.02f;
+		}
+
+		float sheetW = w * flipScale;
+		ImVec2 sheetMn{ mn.x + (w - sheetW) * 0.5f, mn.y };
+		ImVec2 sheetMx{ sheetMn.x + sheetW, mx.y };
+
+		unsigned seed = 4242u;
+		float jag = 6.f;
+
+		std::vector<ImVec2> poly;
+		poly.push_back(sheetMn);
+		float step = 12.f;
+		for (float x = sheetMn.x + step; x < sheetMx.x; x += step)
+		{
+			float jy = sheetMn.y + (Rng(seed) - 0.5f) * jag;
+			poly.push_back({ x, jy });
+		}
+		poly.push_back({ sheetMx.x, sheetMn.y });
+		for (float y = sheetMn.y + step; y < sheetMx.y; y += step)
+		{
+			float jx = sheetMx.x + (Rng(seed) - 0.5f) * jag;
+			poly.push_back({ jx, y });
+		}
+		poly.push_back({ sheetMx.x, sheetMx.y });
+		for (float x = sheetMx.x - step; x > sheetMn.x; x -= step)
+		{
+			float jy = sheetMx.y + (Rng(seed) - 0.5f) * jag;
+			poly.push_back({ x, jy });
+		}
+		poly.push_back(sheetMn);
+		for (float y = sheetMx.y - step; y > sheetMn.y; y -= step)
+		{
+			float jx = sheetMn.x + (Rng(seed) - 0.5f) * jag;
+			poly.push_back({ jx, y });
+		}
+
+		dl->AddConvexPolyFilled(poly.data(), (int)poly.size(), FadeCol(IM_COL32(210, 200, 175, 255), A));
+		dl->AddPolyline(poly.data(), (int)poly.size(), FadeCol(IM_COL32(160, 140, 110, 200), A), ImDrawFlags_None, 1.5f);
+
+		bool showBack = s_showingBack || (s_flipAnimating && !s_flipToFront);
+
+		if (flipScale > 0.1f)
+		{
+			if (showBack)
+			{
+				DrawSheetContent(dl, f, s_overlayCache.backText, s_overlayCache.backDrawing,
+					sheetMn, sheetMx, sheetW, h, A, false);
+			}
+			else
+			{
+				DrawSheetContent(dl, f, s_overlayCache.text, s_overlayCache.drawing,
+					sheetMn, sheetMx, sheetW, h, A, false);
+			}
+		}
 
 		ImFont* df = ImGui::GetFont();
 		const float refH = 1080.f;
@@ -762,11 +1078,23 @@ namespace Sheets
 		std::string helpStr;
 		if (s_viewingDiscoverable)
 		{
-			helpStr = WJConfig::Sheet_ReadHint + "   |   ESC: " + WJConfig::Sheet_CloseHint;
+			helpStr = WJConfig::Sheet_KeepSheet;
+			bool hasBack = showBack ?
+				(!s_overlayCache.text.empty() || !s_overlayCache.drawing.lines.empty()) :
+				(!s_overlayCache.backText.empty() || !s_overlayCache.backDrawing.lines.empty());
+			if (hasBack)
+				helpStr += "   |   " + WJConfig::Sheet_LookBehind;
+			helpStr += "   |   ESC: " + WJConfig::Sheet_CloseHint;
 		}
 		else
 		{
-			helpStr = WJConfig::Sheet_LeaveHint + "   |   " + WJConfig::Sheet_ReadHint + "   |   ESC: " + WJConfig::Sheet_RestoreHint;
+			helpStr = WJConfig::Sheet_LeaveHint;
+			bool hasBack = showBack ?
+				(!s_overlayCache.text.empty() || !s_overlayCache.drawing.lines.empty()) :
+				(!s_overlayCache.backText.empty() || !s_overlayCache.backDrawing.lines.empty());
+			if (hasBack)
+				helpStr += "   |   " + WJConfig::Sheet_LookBehind;
+			helpStr += "   |   ESC: " + WJConfig::Sheet_RestoreHint;
 		}
 		dl->AddText(df, fh, { xm, helpY }, FadeCol(IM_COL32(228, 216, 192, 150), A), helpStr.c_str());
 	}
@@ -869,24 +1197,84 @@ namespace Sheets
 		}
 	}
 
+	static void DrawKeyIcon(ImDrawList* dl, ImFont* f, const char* key, ImVec2 center, float size, float progress, ImU32 bgCol, ImU32 borderCol, ImU32 fillCol, ImU32 textCol)
+	{
+		float half = size * 0.5f;
+		ImVec2 mn{ center.x - half, center.y - half };
+		ImVec2 mx{ center.x + half, center.y + half };
+		float round = size * 0.15f;
+
+		dl->AddRectFilled(mn, mx, bgCol, round);
+		dl->AddRect(mn, mx, borderCol, round, 0, 2.f);
+
+		if (progress > 0.01f)
+		{
+			float barH = 4.f;
+			float barPad = 3.f;
+			ImVec2 barMn{ mn.x + barPad, mx.y - barPad - barH };
+			ImVec2 barMx{ mx.x - barPad, mx.y - barPad };
+			dl->AddRectFilled(barMn, barMx, IM_COL32(30, 25, 20, 180), 2.f);
+			float fillW = (barMx.x - barMn.x) * progress;
+			dl->AddRectFilled({ barMn.x, barMn.y }, { barMn.x + fillW, barMx.y }, fillCol, 2.f);
+			dl->AddRect(barMn, barMx, IM_COL32(200, 200, 200, 150), 2.f, 0, 1.f);
+		}
+
+		ImVec2 tsz = f->CalcTextSizeA(size * 0.5f, FLT_MAX, 0.f, key);
+		float textY = center.y - tsz.y * 0.5f - (progress > 0.01f ? 3.f : 0.f);
+		dl->AddText(f, size * 0.5f, { center.x - tsz.x * 0.5f, textY }, textCol, key);
+	}
+
 	void RenderPickupPrompt()
 	{
 		if (!s_showPickupPrompt || s_nearbySheetId < 0) return;
 		if (s_showingOverlay || s_ripping || s_ripAnimating) return;
+		if (s_eHoldActive || s_eHoldComplete) return;
 
 		ImGuiIO& io = ImGui::GetIO();
 		ImDrawList* dl = ImGui::GetBackgroundDrawList();
 		ImVec2 ds = io.DisplaySize;
 		ImFont* f = io.Fonts->Fonts.Size > 1 ? io.Fonts->Fonts[1] : io.Fonts->Fonts[0];
+		ImFont* df = ImGui::GetFont();
 
 		const char* msg1 = WJConfig::Sheet_Nearby.c_str();
-		const char* msg2 = WJConfig::Sheet_PressE.c_str();
 
 		ImVec2 s1 = f->CalcTextSizeA(f->FontSize * 1.2f, FLT_MAX, 0.f, msg1);
-		ImVec2 s2 = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, msg2);
 
 		float y = ds.y * 0.75f;
 		dl->AddText(f, f->FontSize * 1.2f, { ds.x * 0.5f - s1.x * 0.5f, y }, IM_COL32(234, 223, 197, 255), msg1);
-		dl->AddText(f, f->FontSize, { ds.x * 0.5f - s2.x * 0.5f, y + f->FontSize * 1.5f }, IM_COL32(200, 185, 155, 220), msg2);
+
+		float keySize = 40.f;
+		ImVec2 keyCenter{ ds.x * 0.5f, y + f->FontSize * 1.5f + keySize * 0.5f + 5.f };
+		DrawKeyIcon(dl, df, "E", keyCenter, keySize, 0.f,
+			IM_COL32(20, 16, 12, 220),
+			IM_COL32(200, 185, 155, 220),
+			IM_COL32(255, 255, 255, 200),
+			IM_COL32(234, 223, 197, 255));
+	}
+
+	void RenderEHoldPrompt()
+	{
+		if (!s_eHoldActive) return;
+
+		ImGuiIO& io = ImGui::GetIO();
+		ImDrawList* dl = ImGui::GetBackgroundDrawList();
+		ImVec2 ds = io.DisplaySize;
+		ImFont* f = io.Fonts->Fonts.Size > 1 ? io.Fonts->Fonts[1] : io.Fonts->Fonts[0];
+		ImFont* df = ImGui::GetFont();
+
+		const char* msg1 = WJConfig::Sheet_Nearby.c_str();
+		ImVec2 s1 = f->CalcTextSizeA(f->FontSize * 1.2f, FLT_MAX, 0.f, msg1);
+
+		float y = ds.y * 0.75f;
+		dl->AddText(f, f->FontSize * 1.2f, { ds.x * 0.5f - s1.x * 0.5f, y }, IM_COL32(234, 223, 197, 255), msg1);
+
+		float keySize = 48.f;
+		ImVec2 keyCenter{ ds.x * 0.5f, y + f->FontSize * 1.5f + keySize * 0.5f + 5.f };
+		float progress = s_eHoldProgress / E_HOLD_TIME;
+		DrawKeyIcon(dl, df, "E", keyCenter, keySize, progress,
+			IM_COL32(20, 16, 12, 220),
+			IM_COL32(255, 215, 0, 240),
+			IM_COL32(255, 255, 255, 230),
+			IM_COL32(255, 255, 255, 255));
 	}
 }

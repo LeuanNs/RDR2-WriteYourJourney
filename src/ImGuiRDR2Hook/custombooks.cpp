@@ -265,7 +265,16 @@ namespace CustomBooks
 		s_inventoryOpen = false;
 		auto& book = s_loadedBooks[internalName];
 
-		book.lazyTotalLines = (int)book.lines.size();
+		book.lazyTotalLines = 0;
+		fs::path bodyPath = GetBooksDir() / internalName / "body.txt";
+		std::ifstream countFile(bodyPath);
+		if (countFile)
+		{
+			std::string line;
+			while (std::getline(countFile, line))
+				book.lazyTotalLines++;
+		}
+
 		book.lazyTotalChars = 0;
 		for (const auto& l : book.lines) book.lazyTotalChars += (int)l.size();
 
@@ -824,22 +833,14 @@ namespace CustomBooks
 
 		if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
 		{
-			int linesPerPage = (int)(pageTextH / lineH);
-			if (linesPerPage < 1) linesPerPage = 1;
-			int pagesPerChunk = LAZY_CHUNK_SIZE / linesPerPage;
-			int thresholdPages = LAZY_THRESHOLD / linesPerPage;
-			if (thresholdPages < 1) thresholdPages = 1;
+			int targetLine = s_currentPage * linesPerPage * 2;
+			int halfChunk = LAZY_CHUNK_SIZE / 2;
+			int neededStart = std::max(0, targetLine - halfChunk / 2);
+			int neededEnd = neededStart + LAZY_CHUNK_SIZE;
 
-			if (s_currentPage + thresholdPages >= (int)(book.lines.size() / linesPerPage + 1) &&
-			    book.lazyStartLine + book.lazyLoadedCount < book.lazyTotalLines)
+			if (targetLine < book.lazyStartLine || targetLine >= book.lazyStartLine + book.lazyLoadedCount)
 			{
-				int newCenter = book.lazyStartLine + s_currentPage * linesPerPage + LAZY_CHUNK_SIZE / 4;
-				LoadChunk(book, newCenter);
-			}
-			else if (s_currentPage < thresholdPages && book.lazyStartLine > 0)
-			{
-				int newCenter = book.lazyStartLine + s_currentPage * linesPerPage - LAZY_CHUNK_SIZE / 4;
-				LoadChunk(book, newCenter);
+				LoadChunk(book, targetLine);
 			}
 		}
 
@@ -854,6 +855,13 @@ namespace CustomBooks
 
 		int leftPage = s_currentPage * 2;
 		int rightPage = leftPage + 1;
+
+		int totalWrappedPages = (int)wrappedLines.size() / linesPerPage + 1;
+		if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
+		{
+			int totalLinesEstimate = book.lazyTotalLines;
+			totalWrappedPages = (totalLinesEstimate + linesPerPage - 1) / linesPerPage;
+		}
 
 		auto drawPage = [&](int pageIdx, float px, float py, float pw)
 		{
@@ -881,7 +889,7 @@ namespace CustomBooks
 		float leftX = bx + margin;
 		float rightX = bx + bookW * 0.5f + margin * 0.5f;
 		drawPage(leftPage, leftX, by, pageW);
-		if (rightPage < (int)wrappedLines.size() / linesPerPage + 1)
+		if (rightPage < totalWrappedPages)
 			drawPage(rightPage, rightX, by, pageW);
 
 		const char* btitle = book.config.displayTitle.c_str();
@@ -926,7 +934,8 @@ namespace CustomBooks
 
 		if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, false))
 		{
-			if ((s_currentPage + 1) * 2 < (int)wrappedLines.size() / linesPerPage + 1)
+			int maxPage = totalWrappedPages / 2;
+			if (s_currentPage < maxPage)
 				s_currentPage++;
 		}
 		if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false))
@@ -1136,20 +1145,39 @@ namespace CustomBooks
 		ImVec2 ds = io.DisplaySize;
 		ImFont* f = io.Fonts->Fonts[1] ? io.Fonts->Fonts[1] : io.Fonts->Fonts[0];
 
-		dl->AddRectFilled({ 0, 0 }, ds, IM_COL32(10, 8, 5, 230));
+		dl->AddRectFilled({ 0, 0 }, ds, IM_COL32(0, 0, 0, 200));
+
+		float bookW = ds.x * 0.6f;
+		float bookH = ds.y * 0.75f;
+		float bx = ds.x * 0.5f - bookW * 0.5f;
+		float by = ds.y * 0.5f - bookH * 0.5f;
+
+		ImU32 coverCol = IM_COL32(book.config.coverColorRGB[0], book.config.coverColorRGB[1], book.config.coverColorRGB[2], 255);
+		ImU32 pageCol = IM_COL32(245, 235, 220, 255);
+
+		dl->AddRectFilled({ bx - 4, by - 4 }, { bx + bookW + 4, by + bookH + 4 }, coverCol, 6.f);
+		dl->AddRectFilled({ bx, by }, { bx + bookW, by + bookH }, pageCol, 3.f);
+
+		float spineX = bx + bookW * 0.5f - 2.f;
+		dl->AddRectFilled({ spineX, by }, { spineX + 4, by + bookH }, IM_COL32(180, 170, 155, 255));
+
+		float margin = 30.f;
+		float pageW = bookW * 0.5f - margin * 1.5f;
 
 		const char* title = "Index";
-		ImVec2 ts = f->CalcTextSizeA(f->FontSize * 2.0f, FLT_MAX, 0.f, title);
-		dl->AddText(f, f->FontSize * 2.0f, { ds.x * 0.5f - ts.x * 0.5f, 50.f }, IM_COL32(230, 205, 160, 255), title);
+		ImVec2 ts = f->CalcTextSizeA(f->FontSize * 1.8f, FLT_MAX, 0.f, title);
+		dl->AddText(f, f->FontSize * 1.8f, { bx + margin + pageW * 0.5f - ts.x * 0.5f, by + margin }, IM_COL32(48, 38, 30, 255), title);
 
-		float startY = 120.f;
-		float lineHeight = f->FontSize * 2.5f;
-		float maxVisible = (ds.y - startY - 80.f) / lineHeight;
+		float startY = by + margin + f->FontSize * 2.5f;
+		float lineHeight = f->FontSize * 2.2f;
+		float maxVisible = (bookH - margin * 2.f - f->FontSize * 3.f) / lineHeight;
 		int visibleCount = std::min((int)book.chapters.size(), (int)maxVisible);
 
 		int startIdx = std::max(0, s_selectedChapterIdx - (int)(maxVisible / 2));
 		if (startIdx + visibleCount > (int)book.chapters.size())
 			startIdx = std::max(0, (int)book.chapters.size() - visibleCount);
+
+		float leftX = bx + margin;
 
 		for (int i = 0; i < visibleCount; ++i)
 		{
@@ -1160,16 +1188,20 @@ namespace CustomBooks
 			float y = startY + i * lineHeight;
 			bool isSelected = (chapterIdx == s_selectedChapterIdx);
 
-			ImU32 textCol = isSelected ? IM_COL32(255, 215, 0, 255) : IM_COL32(200, 180, 140, 220);
-			float fontSize = isSelected ? f->FontSize * 1.3f : f->FontSize * 1.1f;
+			if (isSelected)
+			{
+				dl->AddRectFilled({ leftX, y - 2.f }, { leftX + pageW * 2.f, y + lineHeight - 4.f }, IM_COL32(210, 200, 175, 100), 3.f);
+			}
 
-			ImVec2 cs = f->CalcTextSizeA(fontSize, FLT_MAX, 0.f, chapter.title.c_str());
-			dl->AddText(f, fontSize, { ds.x * 0.5f - cs.x * 0.5f, y }, textCol, chapter.title.c_str());
+			ImU32 textCol = isSelected ? IM_COL32(48, 38, 30, 255) : IM_COL32(76, 62, 48, 200);
+			float fontSize = isSelected ? f->FontSize * 1.2f : f->FontSize * 1.0f;
+
+			dl->AddText(f, fontSize, { leftX + 10.f, y }, textCol, chapter.title.c_str());
 		}
 
-		const char* hint = "Arrows: Navigate   |   Enter: Go to chapter   |   ESC: Close";
+		const char* hint = "Arrows: Navigate   |   Enter: Go   |   ESC: Close";
 		ImVec2 hs = f->CalcTextSizeA(f->FontSize * 0.9f, FLT_MAX, 0.f, hint);
-		dl->AddText(f, f->FontSize * 0.9f, { ds.x * 0.5f - hs.x * 0.5f, ds.y - 40.f }, IM_COL32(160, 140, 100, 200), hint);
+		dl->AddText(f, f->FontSize * 0.9f, { ds.x * 0.5f - hs.x * 0.5f, by + bookH - margin - f->FontSize }, IM_COL32(150, 140, 130, 200), hint);
 
 		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
 			CloseIndex();
@@ -1193,6 +1225,12 @@ namespace CustomBooks
 				int targetLine = book.chapters[s_selectedChapterIdx].lineIndex;
 				int linesPerPage = 12;
 				s_currentPage = targetLine / linesPerPage;
+
+				if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
+				{
+					LoadChunk(book, targetLine);
+				}
+
 				CloseIndex();
 			}
 		}
