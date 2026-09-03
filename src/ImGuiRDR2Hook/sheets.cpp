@@ -37,6 +37,10 @@ namespace Sheets
 	static bool s_ripAnimating = false;
 	static float s_ripAnimT = 0.f;
 
+	static bool s_restoreAnimating = false;
+	static float s_restoreAnimT = 0.f;
+	static RippedSheetCache s_restoreCache;
+
 	static bool s_showingOverlay = false;
 	static bool s_viewingDiscoverable = false;
 	static int s_viewingSheetId = -1;
@@ -569,6 +573,10 @@ namespace Sheets
 		}
 
 		SaveRippedPagesIndex();
+		
+		s_restoreCache = s_overlayCache;
+		s_restoreAnimating = true;
+		s_restoreAnimT = 0.f;
 		s_showingOverlay = false;
 		s_overlayCache = RippedSheetCache();
 		s_showingBack = false;
@@ -788,6 +796,18 @@ namespace Sheets
 			s_ripAnimT += ImGui::GetIO().DeltaTime;
 			if (s_ripAnimT >= RIP_ANIM_DURATION)
 				ConfirmRip();
+			return;
+		}
+
+		if (s_restoreAnimating)
+		{
+			s_restoreAnimT += ImGui::GetIO().DeltaTime;
+			if (s_restoreAnimT >= RIP_ANIM_DURATION)
+			{
+				s_restoreAnimating = false;
+				s_restoreAnimT = 0.f;
+				s_restoreCache = RippedSheetCache();
+			}
 			return;
 		}
 
@@ -1176,6 +1196,55 @@ namespace Sheets
 		dl->AddPolyline(corners, 4, FadeCol(IM_COL32(160, 140, 110, 200), A * alpha), ImDrawFlags_Closed, 1.5f);
 	}
 
+	static void DrawRestoreAnimation(const ImVec2 ds, float A)
+	{
+		if (!s_restoreAnimating) return;
+
+		ImDrawList* dl = ImGui::GetBackgroundDrawList();
+		float t = s_restoreAnimT / RIP_ANIM_DURATION;
+		if (t > 1.f) t = 1.f;
+
+		float pageW = ds.x * 0.18f;
+		float pageH = ds.y * 0.35f;
+		float startX = ds.x * 0.65f;
+		float startY = ds.y * 0.15f;
+		float endX = ds.x * 0.5f;
+		float endY = ds.y * 0.5f;
+
+		float cx = startX + (endX - startX) * t;
+		float cy = startY + (endY - startY) * t;
+		float alpha = t;
+		float angle = (1.f - t) * 0.5f;
+		float crumple = std::sin(t * 3.14159f) * 0.15f;
+
+		float cosA = std::cos(angle);
+		float sinA = std::sin(angle);
+		float hw = pageW * 0.5f * (1.f - crumple);
+		float hh = pageH * 0.5f * (1.f + crumple * 0.5f);
+
+		ImVec2 corners[4] = {
+			{ cx + (-hw * cosA - (-hh) * sinA), cy + (-hw * sinA + (-hh) * cosA) },
+			{ cx + (hw * cosA - (-hh) * sinA),  cy + (hw * sinA + (-hh) * cosA) },
+			{ cx + (hw * cosA - hh * sinA),     cy + (hw * sinA + hh * cosA) },
+			{ cx + (-hw * cosA - hh * sinA),    cy + (-hw * sinA + hh * cosA) }
+		};
+
+		dl->AddConvexPolyFilled(corners, 4, FadeCol(IM_COL32(210, 200, 175, 255), A * alpha));
+		dl->AddPolyline(corners, 4, FadeCol(IM_COL32(160, 140, 110, 200), A * alpha), ImDrawFlags_Closed, 1.5f);
+
+		if (t > 0.3f && t < 0.7f)
+		{
+			float wrinkleAlpha = (t - 0.3f) / 0.4f;
+			wrinkleAlpha = 1.f - std::abs(wrinkleAlpha - 0.5f) * 2.f;
+			for (int i = 0; i < 3; ++i)
+			{
+				float wy = cy - hh + (hh * 2.f) * (i + 1) / 4.f;
+				dl->AddLine({ cx - hw * 0.8f, wy }, { cx + hw * 0.8f, wy },
+				            FadeCol(IM_COL32(140, 120, 90, 150), A * wrinkleAlpha), 1.f);
+			}
+		}
+	}
+
 	void Render()
 	{
 		if (s_showingOverlay)
@@ -1189,6 +1258,13 @@ namespace Sheets
 		{
 			ImGuiIO& io = ImGui::GetIO();
 			DrawRipAnimation(io.DisplaySize, 1.f);
+			return;
+		}
+
+		if (s_restoreAnimating)
+		{
+			ImGuiIO& io = ImGui::GetIO();
+			DrawRestoreAnimation(io.DisplaySize, 1.f);
 			return;
 		}
 

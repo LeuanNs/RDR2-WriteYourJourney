@@ -1,5 +1,84 @@
 # Changelog - Write Your Journey
 
+## [Build - Testing Fixes Batch 3] - 2026-09-03
+
+### Fixes based on Testing.md feedback (Batch 3)
+
+**Fix 1: Index bug - se bugueaba al abrir directamente con I**
+- Agregada llamada a OpenBook() despues de CloseIndex() en RenderIndex()
+- Ahora al presionar Enter en un capitulo del Index, se abre el libro automaticamente
+- El Index ya no se buguea al abrir directamente con I desde el inventory
+
+**Fix 2: Glow - separado glow normal vs glow fuerte para paginas faltantes**
+- Revertido DrawPageGlow() a la version original (2 capas, alpha 130-190) para paginas seleccionadas
+- Creada nueva funcion DrawRippedPageGlow() (4 capas, alpha 180-255) para paginas ripped
+- Aplicado glow fuerte solo a paginas ripped en journal y custombooks
+- El glow normal ahora es sutil como antes, el glow fuerte solo marca paginas faltantes
+
+**Fix 3: Random page - no tomaba todas las paginas del libro**
+- Corregido calculo de totalPages usando book.lazyTotalLines para libros grandes
+- Ahora el random page considera todas las paginas del libro, no solo las cargadas
+- Fix aplicado tanto para random page (R) como para Index
+
+**Fix 4: ENTER selection mode - a veces no respondia**
+- Separado input de ENTER y click mouse en RenderBook()
+- ENTER ahora selecciona leftPage (o rightPage si left esta ripped) directamente
+- Click mouse sigue funcionando como antes para seleccionar pagina especifica
+- El ENTER ahora funciona siempre que el custombook este abierto
+
+**Fix 5: Night tint - demasiado oscuro**
+- Ajustado tinte nocturno de (50,45,35,200) a (60,55,45,160) - mas claro
+- Agregado tinte diurno sutil (100,90,75,100) para mejor consistencia visual
+- El journal ahora tiene mejor balance entre dia y noche
+
+**Fix 6: ESC restore - animacion de arrugada implementada**
+- Agregadas variables s_restoreAnimating, s_restoreAnimT, s_restoreCache
+- Modificado RestorePage() para iniciar animacion en vez de cerrar inmediatamente
+- Creada funcion DrawRestoreAnimation() con efecto de hoja volviendo al journal
+- Animacion incluye: movimiento desde esquina superior derecha al centro, efecto de arrugado con sin(t*PI), lineas de arruga que aparecen y desaparecen
+- Duracion: 0.9s (igual que rip animation)
+
+### Archivos modificados
+- `src/ImGuiRDR2Hook/custombooks.cpp` - Fix Index, fix random page, fix ENTER selection, glow separado
+- `src/ImGuiRDR2Hook/menu.cpp` - Glow separado, night tint ajustado
+- `src/ImGuiRDR2Hook/sheets.cpp` - Animacion ESC restore implementada
+- `Documentacion/CHANGELOG.md` - Actualizado con Batch 3
+- `Testing.md` - Actualizado con resultados de Batch 3
+
+### Checklist de Testing
+
+#### Index - Fix critico
+- [ ] Abrir Index directamente con I desde inventory -> ya no se buguea
+- [ ] Presionar Enter en capitulo -> abre libro automaticamente en esa pagina
+- [ ] ESC en Index -> cierra Index sin problemas
+
+#### Glow - Separado normal vs fuerte
+- [ ] Paginas seleccionadas -> glow sutil como antes (2 capas)
+- [ ] Paginas ripped -> glow fuerte (4 capas, alpha 180-255)
+- [ ] Verificar que el glow fuerte marca bien la forma de la pagina faltante
+
+#### Random page - Fix paginas lejanas
+- [ ] Presionar R en satchel -> abre pagina aleatoria de TODO el libro
+- [ ] Verificar que puede abrir paginas mas alla de la 100
+- [ ] Lazy loading funciona correctamente desde pagina aleatoria
+
+#### ENTER selection mode - Fix
+- [ ] Abrir custombook -> presionar ENTER -> selecciona pagina izquierda
+- [ ] Si pagina izquierda esta ripped -> selecciona pagina derecha
+- [ ] ENTER funciona siempre que el custombook este abierto
+
+#### Night tint - Ajustado
+- [ ] De dia -> tinte sutil (100,90,75,100)
+- [ ] De noche (21:00-06:00) -> tinte mas claro (60,55,45,160)
+- [ ] Verificar que no deslumbra de noche ni es demasiado oscuro
+
+#### ESC restore - Animacion
+- [ ] Rippear pagina -> presionar ESC en overlay -> animacion de hoja volviendo
+- [ ] Animacion muestra efecto de arrugado (lineas que aparecen/desaparecen)
+- [ ] Hoja vuelve al journal sin danos
+
+---
+
 ## [Build - Testing Fixes Batch 2] - 2026-09-02
 
 ### Fixes based on Testing.md feedback (Batch 2)
