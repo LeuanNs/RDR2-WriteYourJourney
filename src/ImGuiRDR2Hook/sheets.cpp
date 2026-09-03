@@ -99,6 +99,22 @@ namespace Sheets
 		return fs::path(WJConfig::GetModuleDir()) / "myjourney" / "damaged_pages.ini";
 	}
 
+	static fs::path GetBodyBackupPath(const std::string& bookName)
+	{
+		return fs::path(WJConfig::GetModuleDir()) / "MyJourney" / "Books" / bookName / "body_backup.txt";
+	}
+
+	static void CreateBodyBackupIfNeeded(const std::string& bookName)
+	{
+		fs::path backupPath = GetBodyBackupPath(bookName);
+		if (fs::exists(backupPath)) return;
+		
+		fs::path bodyPath = fs::path(WJConfig::GetModuleDir()) / "MyJourney" / "Books" / bookName / "body.txt";
+		if (!fs::exists(bodyPath)) return;
+		
+		fs::copy_file(bodyPath, backupPath);
+	}
+
 	static std::string Trim(const std::string& s)
 	{
 		size_t a = s.find_first_not_of(" \t\r\n");
@@ -582,15 +598,16 @@ namespace Sheets
 			s_rippedJournalPages.insert(page);
 			if (partner > 0) s_rippedJournalPages.insert(partner);
 		}
-		else
-		{
-			s_rippedCustomPages[s_ripCache.bookName].insert(page);
-			if (partner > 0) s_rippedCustomPages[s_ripCache.bookName].insert(partner);
-			CustomBooks::RipPage(s_ripCache.bookName, page);
-			int linesPerPage = 12;
-			int lineIndex = page * linesPerPage;
-			CustomBooks::MarkChapterAsRipped(s_ripCache.bookName, lineIndex);
-		}
+	else
+	{
+		CreateBodyBackupIfNeeded(s_ripCache.bookName);
+		s_rippedCustomPages[s_ripCache.bookName].insert(page);
+		if (partner > 0) s_rippedCustomPages[s_ripCache.bookName].insert(partner);
+		CustomBooks::RipPage(s_ripCache.bookName, page);
+		int linesPerPage = 12;
+		int lineIndex = page * linesPerPage;
+		CustomBooks::MarkChapterAsRipped(s_ripCache.bookName, lineIndex);
+	}
 
 		SaveRippedPagesIndex();
 
@@ -707,56 +724,46 @@ namespace Sheets
 						}
 						else if (!sheet.bookName.empty())
 						{
-							// Restore to custombook: MyJourney/Books/bookName/body.txt
 							fs::path bookDir = fs::path(WJConfig::GetModuleDir()) / "MyJourney" / "Books" / sheet.bookName;
 							
 							if (fs::exists(sheetTxtPath))
 							{
-								// Read sheet content
 								std::ifstream sheetFile(sheetTxtPath);
 								std::string sheetContent((std::istreambuf_iterator<char>(sheetFile)), std::istreambuf_iterator<char>());
 								sheetFile.close();
 								
-								// Read body.txt
+								fs::path backupPath = GetBodyBackupPath(sheet.bookName);
 								fs::path bodyPath = bookDir / "body.txt";
-								if (fs::exists(bodyPath))
+								
+								if (fs::exists(backupPath) && fs::exists(bodyPath))
 								{
-									std::ifstream bodyFile(bodyPath);
-									std::vector<std::string> lines;
-									std::string line;
-									while (std::getline(bodyFile, line))
-										lines.push_back(line);
-									bodyFile.close();
+									std::ifstream backupFile(backupPath);
+									std::string backupContent((std::istreambuf_iterator<char>(backupFile)), std::istreambuf_iterator<char>());
+									backupFile.close();
 									
-									// Calculate line range for this page (approximate)
-									int linesPerPage = 12; // approximate
-									int startLine = (sheet.originalPage - 1) * linesPerPage;
-									
-									// Split sheet content into lines
-									std::vector<std::string> sheetLines;
-									std::istringstream iss(sheetContent);
-									std::string sheetLine;
-									while (std::getline(iss, sheetLine))
-										sheetLines.push_back(sheetLine);
-									
-									// Replace lines in body
-									for (size_t i = 0; i < sheetLines.size() && (startLine + i) < lines.size(); ++i)
-										lines[startLine + i] = sheetLines[i];
-									
-									// Write back to body.txt
-									std::ofstream outBody(bodyPath);
-									for (const auto& l : lines)
-										outBody << l << "\n";
-									outBody.close();
+									size_t pos = backupContent.find(sheetContent);
+									if (pos != std::string::npos)
+									{
+										std::ifstream bodyFile(bodyPath);
+										std::string bodyContent((std::istreambuf_iterator<char>(bodyFile)), std::istreambuf_iterator<char>());
+										bodyFile.close();
+										
+										std::string before = backupContent.substr(0, pos);
+										std::string after = backupContent.substr(pos + sheetContent.length());
+										
+										std::string restoredContent = before + sheetContent + after;
+										
+										std::ofstream outBody(bodyPath);
+										outBody << restoredContent;
+										outBody.close();
+									}
 								}
 							}
 							
-							// Mark as damaged
 							int partner = GetPartnerPage(sheet.originalPage);
 							s_damagedCustomPages[sheet.bookName].insert(sheet.originalPage);
 							if (partner > 0) s_damagedCustomPages[sheet.bookName].insert(partner);
 							
-							// Remove from ripped pages
 							auto it = s_rippedCustomPages.find(sheet.bookName);
 							if (it != s_rippedCustomPages.end())
 							{

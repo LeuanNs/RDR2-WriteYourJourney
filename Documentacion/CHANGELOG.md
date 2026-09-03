@@ -1,5 +1,99 @@
 # Changelog - Write Your Journey
 
+## [Build - CustomBooks Backup System] - 2026-09-03
+
+### Sistema de backup para restauración precisa en CustomBooks
+
+**Problema resuelto:**
+La restauración de páginas arrancadas en custombooks usaba un cálculo aproximado (12 líneas por página), lo que causaba que el texto se restaurara en la ubicación incorrecta, especialmente si se arrancaban múltiples páginas del mismo libro.
+
+**Solución implementada:**
+Sistema de backup que crea una copia de seguridad del `body.txt` antes de la primera arrancada, y al restaurar con K, busca el texto exacto de la hoja en el backup para restaurarlo en su ubicación original precisa.
+
+**Cambios en sheets.cpp:**
+
+1. **Nueva función `GetBodyBackupPath()`** (líneas ~100-103):
+   - Retorna la ruta del backup: `MyJourney/Books/[bookName]/body_backup.txt`
+
+2. **Nueva función `CreateBodyBackupIfNeeded()`** (líneas ~105-113):
+   - Verifica si existe `body_backup.txt` en la carpeta del libro
+   - Si NO existe, copia `body.txt` a `body_backup.txt`
+   - Si ya existe, no hace nada (preserva el backup original)
+
+3. **Modificación en `ConfirmRip()`** (línea ~600):
+   - Agregada llamada a `CreateBodyBackupIfNeeded()` cuando se rippea un custombook
+   - El backup se crea ANTES de modificar el body.txt
+
+4. **Modificación en `KeepSheet()`** (líneas ~708-750):
+   - Reemplazada lógica aproximada (cálculo de líneas por página) por búsqueda exacta
+   - Lee el contenido de `sheet.txt` (texto de la hoja)
+   - Lee el contenido de `body_backup.txt` (backup original)
+   - Busca la posición exacta del texto de la hoja en el backup usando `find()`
+   - Reconstruye el body.txt insertando el texto en su ubicación original
+   - Si no encuentra el texto (caso edge), no modifica nada
+
+**Flujo completo:**
+
+1. **Al rippear página de custombook:**
+   - Se crea `body_backup.txt` (si no existe)
+   - Se modifica `body.txt` (se elimina el texto de la página)
+   - Se crea discoverable con `sheet.txt`
+
+2. **Al keepear con K:**
+   - Se lee `sheet.txt` del discoverable
+   - Se lee `body_backup.txt` (backup original)
+   - Se busca el texto exacto de la hoja en el backup
+   - Se reconstruye `body.txt` con el texto en su ubicación original
+   - Se marca página como dañada (visual de arrugas)
+
+**Ventajas:**
+- No importa cuántas hojas se arranquen del mismo libro, cada una se restaura exactamente en su ubicación
+- El backup se crea una sola vez y se preserva intacto
+- No depende de cálculos aproximados de líneas por página
+- Funciona incluso si el word wrap varía entre páginas
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/sheets.cpp` - Agregadas funciones de backup, modificadas ConfirmRip() y KeepSheet()
+
+**Build output:**
+- `WriteYourJourney.asi` compilado exitosamente en `C:\Users\evanm\Desktop\`
+- 0 errores, 0 advertencias
+
+### Checklist de Testing
+
+#### CustomBooks - Backup y restauración precisa
+- [ ] Abrir custombook (ej: Biblia NT 1858)
+- [ ] Navegar a página con contenido (ej: página 5)
+- [ ] Rippear página (P hold 3s) → overlay aparece
+- [ ] Verificar que se creó `MyJourney/Books/[Nombre]/body_backup.txt`
+- [ ] Dejar hoja en el mundo (L) → se crea discoverable
+- [ ] Alejar y volver a abrir custombook → página muestra slot rasgado + "Page Ripped"
+- [ ] Acercar a discoverable → aparece prompt de pickup
+- [ ] Presionar R → personaje camina, se agacha, muestra overlay
+- [ ] Presionar K → hoja se keepea
+- [ ] Abrir custombook → página restaurada en ubicación exacta con visual de daño
+- [ ] Verificar que el texto restaurado está en la misma posición que antes de arrancar
+
+#### CustomBooks - Múltiples hojas arrancadas
+- [ ] Arrancar 3 páginas diferentes del mismo custombook (ej: páginas 5, 10, 15)
+- [ ] Dejar las 3 como discoverables
+- [ ] Keepear las 3 con K (en cualquier orden)
+- [ ] Verificar que las 3 se restauran en sus ubicaciones exactas
+- [ ] Verificar que no hay sobrescritura ni desplazamiento de texto
+
+#### CustomBooks - Backup preservado
+- [ ] Arrancar página → verificar que body_backup.txt se crea
+- [ ] Arrancar otra página → verificar que body_backup.txt NO se sobrescribe (mismo timestamp)
+- [ ] Verificar que el backup contiene el contenido original completo
+
+#### Journal - Sin cambios
+- [ ] Abrir journal → escribir en página 37
+- [ ] Rippear y dejar en mundo (L)
+- [ ] Keepear con K → verificar que se restaura normalmente (copia simple de archivos)
+- [ ] Verificar que journal NO usa sistema de backup (solo custombooks)
+
+---
+
 ## [Documentacion - AGENT_CONTEXT.md Completo] - 2026-09-03
 
 ### Revision y actualizacion de documentacion para IA
