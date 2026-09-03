@@ -2,21 +2,6 @@
 
 ---
 
-## 2. Notas en el mapa
-
-**Cómo funcionaría**: Jugador escribe nota, guarda coords actuales. Al acercarse a esas coords (<2m), puede leer la nota con tecla interacción.
-
-**TODO**:
-- [ ] Crear sistema de "waypoints personalizados" con estructura: `{coords, pageId, author}`
-- [ ] Guardar en `myjourney/waypoints.dat` (formato binario similar a `_draw.dat`)
-- [ ] En `script.cpp`, cada frame: obtener coords con `GET_ENTITY_COORDS(PLAYER_PED_ID())`
-- [ ] Calcular distancia a cada waypoint guardado
-- [ ] Si distancia < 2m, mostrar prompt "Press F to read note"
-- [ ] Al presionar F, abrir diario en página específica (reutilizar `OpenSession()` + `SelectPage()`)
-- [ ] UI: añadir opción en menú de dibujo "Save note here" que capture coords actuales
-
----
-
 ## 3. Diarios de NPCs al lootear
 
 **Cómo funcionaría**: Al lootear cadáver, % de encontrar "diario del NPC" con contenido lore-friendly. Algunas notas dan pistas de tesoros.
