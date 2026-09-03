@@ -637,6 +637,23 @@ namespace Sheets
 						if (out) out << content;
 					}
 					sheet.collected = true;
+
+					// Restore the page to its original journal/custombook with damaged visual
+					if (sheet.originalPage > 0)
+					{
+						int partner = GetPartnerPage(sheet.originalPage);
+						if (sheet.fromJournal)
+						{
+							s_restoredJournalPages.insert(sheet.originalPage);
+							if (partner > 0) s_restoredJournalPages.insert(partner);
+						}
+						else if (!sheet.bookName.empty())
+						{
+							s_restoredCustomPages[sheet.bookName].insert(sheet.originalPage);
+							if (partner > 0) s_restoredCustomPages[sheet.bookName].insert(partner);
+							CustomBooks::RestorePage(sheet.bookName, sheet.originalPage);
+						}
+					}
 					break;
 				}
 			}

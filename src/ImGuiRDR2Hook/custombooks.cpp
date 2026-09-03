@@ -2,6 +2,7 @@
 #include "custombooks.h"
 #include "sheets.h"
 #include "config.h"
+#include "menu.h"
 #include "imgui/imgui.h"
 #include <filesystem>
 #include <fstream>
@@ -45,6 +46,7 @@ namespace CustomBooks
 	static bool s_showPickupPrompt = false;
 	static bool s_indexOpen = false;
 	static int s_selectedChapterIdx = 0;
+	static bool s_indexPending = false;
 
 	static std::unordered_map<std::string, std::unordered_set<int>> s_rippedCustomBookPages;
 	static int s_cbSelectedPage = -1;
@@ -260,12 +262,15 @@ namespace CustomBooks
 	{
 		s_inventoryOpen = true;
 		s_selectedBookIdx = 0;
+		CImGuiMenu::SetShouldDrawMouse(true);
 	}
 
 	void CloseInventory()
 	{
 		s_inventoryOpen = false;
 		s_searchFocused = false;
+		s_indexPending = false;
+		CImGuiMenu::SetShouldDrawMouse(false);
 	}
 
 	bool IsInventoryOpen()
@@ -819,8 +824,9 @@ namespace CustomBooks
 				
 				if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
 				{
-					int targetLine = s_currentPage * linesPerPage * 2;
-					LoadChunk(book, targetLine);
+					auto& bookRef = s_loadedBooks[bookName];
+					int targetLine = s_currentPage * linesPerPage;
+					LoadChunk(bookRef, targetLine);
 				}
 			}
 		}
@@ -835,10 +841,16 @@ namespace CustomBooks
 				if (book.config.hasIndex && !book.chapters.empty())
 				{
 					s_currentBook = bookName;
-					CloseInventory();
-					OpenIndex();
+					s_indexPending = true;
 				}
 			}
+		}
+
+		if (s_indexPending && (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)))
+		{
+			s_indexPending = false;
+			CloseInventory();
+			OpenIndex();
 		}
 	}
 
@@ -1069,7 +1081,8 @@ namespace CustomBooks
 				bool isLeft = (pageIdx % 2 == 0);
 				ImVec2 pgMin{ px, py };
 				ImVec2 pgMax{ px + pw, py + bookH - margin * 2.f };
-				DrawRestoredPageDamageOverlay(dl, pgMin, pgMax, isLeft);
+				ImDrawList* fgDl = ImGui::GetForegroundDrawList();
+				DrawRestoredPageDamageOverlay(fgDl, pgMin, pgMax, isLeft);
 			}
 		};
 
@@ -1897,15 +1910,15 @@ namespace CustomBooks
 	static void DrawRippedPageSlot(ImDrawList* dl, ImVec2 pgMin, ImVec2 pgMax, bool isLeft)
 	{
 		unsigned seed = isLeft ? 1234u : 5678u;
-		float jagSize = 6.f;
-		float step = 10.f;
+		float jagSize = 8.f;
+		float step = 8.f;
 
 		auto rng = [](unsigned& s) -> float {
 			s = s * 1664525u + 1013904223u;
 			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
 		};
 
-		dl->AddRectFilled(pgMin, pgMax, IM_COL32(180, 165, 135, 120));
+		dl->AddRectFilled(pgMin, pgMax, IM_COL32(160, 145, 115, 140));
 
 		std::vector<ImVec2> tornEdge;
 		if (isLeft)
@@ -1930,6 +1943,24 @@ namespace CustomBooks
 		}
 
 		if (tornEdge.size() >= 3)
-			dl->AddConvexPolyFilled(tornEdge.data(), (int)tornEdge.size(), IM_COL32(210, 200, 175, 200));
+			dl->AddConvexPolyFilled(tornEdge.data(), (int)tornEdge.size(), IM_COL32(190, 180, 155, 180));
+
+		for (int i = 0; i < 8; ++i)
+		{
+			float rx = pgMin.x + rng(seed) * (pgMax.x - pgMin.x);
+			float ry = pgMin.y + rng(seed) * (pgMax.y - pgMin.y);
+			float rr = 2.f + rng(seed) * 5.f;
+			dl->AddCircleFilled({ rx, ry }, rr, IM_COL32(220, 210, 190, 100), 6);
+		}
+
+		for (int i = 0; i < 3; ++i)
+		{
+			float sx = isLeft ? (pgMax.x - 5.f - rng(seed) * 15.f) : (pgMin.x + 5.f + rng(seed) * 15.f);
+			float sy = pgMin.y + (pgMax.y - pgMin.y) * (0.2f + rng(seed) * 0.6f);
+			float sLen = 8.f + rng(seed) * 12.f;
+			float sAngle = (rng(seed) - 0.5f) * 0.6f;
+			dl->AddLine({ sx, sy }, { sx + std::cos(sAngle) * sLen, sy + std::sin(sAngle) * sLen },
+			            IM_COL32(100, 90, 70, 160), 1.5f);
+		}
 	}
 }

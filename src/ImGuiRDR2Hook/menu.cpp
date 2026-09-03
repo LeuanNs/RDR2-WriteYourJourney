@@ -683,10 +683,10 @@ namespace
 	void DrawRippedPageSlot(ImDrawList* dl, ImVec2 pgMin, ImVec2 pgMax, float A, bool isLeft)
 	{
 		unsigned seed = isLeft ? 1234u : 5678u;
-		float jagSize = 6.f;
-		float step = 10.f;
+		float jagSize = 8.f;
+		float step = 8.f;
 
-		dl->AddRectFilled(pgMin, pgMax, FadeCol(IM_COL32(180, 165, 135, 120), A));
+		dl->AddRectFilled(pgMin, pgMax, FadeCol(IM_COL32(160, 145, 115, 140), A));
 
 		std::vector<ImVec2> tornEdge;
 		if (isLeft)
@@ -711,14 +711,24 @@ namespace
 		}
 
 		if (tornEdge.size() >= 3)
-			dl->AddConvexPolyFilled(tornEdge.data(), (int)tornEdge.size(), FadeCol(IM_COL32(210, 200, 175, 200), A));
+			dl->AddConvexPolyFilled(tornEdge.data(), (int)tornEdge.size(), FadeCol(IM_COL32(190, 180, 155, 180), A));
 
-		for (int i = 0; i < 5; ++i)
+		for (int i = 0; i < 8; ++i)
 		{
 			float rx = pgMin.x + Rng(seed) * (pgMax.x - pgMin.x);
 			float ry = pgMin.y + Rng(seed) * (pgMax.y - pgMin.y);
-			float rr = 2.f + Rng(seed) * 4.f;
-			dl->AddCircleFilled({ rx, ry }, rr, FadeCol(IM_COL32(240, 235, 220, 80), A), 6);
+			float rr = 2.f + Rng(seed) * 5.f;
+			dl->AddCircleFilled({ rx, ry }, rr, FadeCol(IM_COL32(220, 210, 190, 100), A), 6);
+		}
+
+		for (int i = 0; i < 3; ++i)
+		{
+			float sx = isLeft ? (pgMax.x - 5.f - Rng(seed) * 15.f) : (pgMin.x + 5.f + Rng(seed) * 15.f);
+			float sy = pgMin.y + (pgMax.y - pgMin.y) * (0.2f + Rng(seed) * 0.6f);
+			float sLen = 8.f + Rng(seed) * 12.f;
+			float sAngle = (Rng(seed) - 0.5f) * 0.6f;
+			dl->AddLine({ sx, sy }, { sx + std::cos(sAngle) * sLen, sy + std::sin(sAngle) * sLen },
+			            FadeCol(IM_COL32(100, 90, 70, 160), A), 1.5f);
 		}
 	}
 
@@ -762,6 +772,12 @@ namespace
 		if (leftRipped)
 		{
 			DrawRippedPageSlot(dl, g.leftMin, g.leftMax, A, true);
+			const char* msg = WJConfig::Sheet_PageRipped.c_str();
+			ImFont* df = ImGui::GetFont();
+			ImVec2 msz = df->CalcTextSizeA(df->FontSize * 1.1f, FLT_MAX, 0.f, msg);
+			dl->AddText(df, df->FontSize * 1.1f,
+				{ g.leftMin.x + (g.leftMax.x - g.leftMin.x) * 0.5f - msz.x * 0.5f, g.leftMin.y + (g.leftMax.y - g.leftMin.y) * 0.5f - msz.y * 0.5f },
+				FadeCol(IM_COL32(76, 62, 48, 200), A), msg);
 			const float pulse = 0.5f + 0.5f * std::sin((float)ImGui::GetTime() * 4.0f);
 			DrawRippedPageGlow(dl, g.leftMin, g.leftMax, A, pulse);
 		}
@@ -775,6 +791,12 @@ namespace
 		if (rightRipped)
 		{
 			DrawRippedPageSlot(dl, g.rightMin, g.rightMax, A, false);
+			const char* msg = WJConfig::Sheet_PageRipped.c_str();
+			ImFont* df = ImGui::GetFont();
+			ImVec2 msz = df->CalcTextSizeA(df->FontSize * 1.1f, FLT_MAX, 0.f, msg);
+			dl->AddText(df, df->FontSize * 1.1f,
+				{ g.rightMin.x + (g.rightMax.x - g.rightMin.x) * 0.5f - msz.x * 0.5f, g.rightMin.y + (g.rightMax.y - g.rightMin.y) * 0.5f - msz.y * 0.5f },
+				FadeCol(IM_COL32(76, 62, 48, 200), A), msg);
 			const float pulse = 0.5f + 0.5f * std::sin((float)ImGui::GetTime() * 4.0f);
 			DrawRippedPageGlow(dl, g.rightMin, g.rightMax, A, pulse);
 		}
@@ -2216,6 +2238,12 @@ void CImGuiMenu::Render()
 
 	HandleInput();
 
+	// Disable mouse when in Read mode with page selected (keyboard navigation only)
+	if (s_state == eUiState::Open && s_selectedPage != 0 && s_mode == ePageMode::Read && !s_zoomed)
+	{
+		SetShouldDrawMouse(false);
+	}
+
 	// Animaciones de entrada y de apertura del libro
 	s_fadeIn = std::min(1.f, s_fadeIn + io.DeltaTime * 2.4f);
 	const float target = (s_state == eUiState::Open) ? 1.f : 0.f;
@@ -2336,9 +2364,10 @@ void CImGuiMenu::Render()
 			bool isLeft = (s_selectedPage % 2 == 1);
 			if (Sheets::IsPageRestored(s_selectedPage, true))
 			{
+				ImDrawList* fgDl = ImGui::GetForegroundDrawList();
 				const ImVec2 pmin = PageMin(g, s_selectedPage);
 				const ImVec2 pmax = PageMax(g, s_selectedPage);
-				DrawRestoredPageDamageOverlay(dl, pmin, pmax, s_fadeIn, isLeft);
+				DrawRestoredPageDamageOverlay(fgDl, pmin, pmax, s_fadeIn, isLeft);
 			}
 		}
 	}
