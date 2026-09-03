@@ -1,17 +1,22 @@
 #define NOMINMAX
 #include "custombooks.h"
+#include "sheets.h"
 #include "config.h"
 #include "imgui/imgui.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <unordered_set>
+#include <cmath>
 
 namespace fs = std::filesystem;
 
 namespace CustomBooks
 {
 	static std::vector<std::string> WrapText(const std::string& text, float maxWidth, ImFont* f, float fontSize);
+	static void DrawPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float pulse);
+	static void DrawRippedPageSlot(ImDrawList* dl, ImVec2 pgMin, ImVec2 pgMax, bool isLeft);
 
 	static std::vector<std::string> s_availableBooks;
 	static std::vector<std::string> s_filteredBooks; // filtered list for search
@@ -37,6 +42,14 @@ namespace CustomBooks
 	static bool s_showPickupPrompt = false;
 	static bool s_indexOpen = false;
 	static int s_selectedChapterIdx = 0;
+
+	static std::unordered_map<std::string, std::unordered_set<int>> s_rippedCustomBookPages;
+	static int s_cbSelectedPage = -1;
+	static bool s_cbEditMode = false;
+	static int s_cbEditLine = -1;
+	static int s_cbEditStartChar = -1;
+	static int s_cbEditEndChar = -1;
+	static char s_cbEditBuffer[512] = {};
 
 	static fs::path GetBooksDir()
 	{
@@ -263,6 +276,8 @@ namespace CustomBooks
 		s_currentPage = 0;
 		s_bookOpen = true;
 		s_inventoryOpen = false;
+		s_cbSelectedPage = -1;
+		s_cbEditMode = false;
 		auto& book = s_loadedBooks[internalName];
 
 		book.lazyTotalLines = 0;
@@ -798,6 +813,9 @@ namespace CustomBooks
 		if (it == s_loadedBooks.end()) return;
 		auto& book = it->second;
 
+		if (book.edits.empty())
+			LoadEdits(s_currentBook);
+
 		ImGuiIO& io = ImGui::GetIO();
 		ImDrawList* dl = ImGui::GetBackgroundDrawList();
 		ImVec2 ds = io.DisplaySize;
@@ -834,10 +852,6 @@ namespace CustomBooks
 		if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
 		{
 			int targetLine = s_currentPage * linesPerPage * 2;
-			int halfChunk = LAZY_CHUNK_SIZE / 2;
-			int neededStart = std::max(0, targetLine - halfChunk / 2);
-			int neededEnd = neededStart + LAZY_CHUNK_SIZE;
-
 			if (targetLine < book.lazyStartLine || targetLine >= book.lazyStartLine + book.lazyLoadedCount)
 			{
 				LoadChunk(book, targetLine);
@@ -863,10 +877,39 @@ namespace CustomBooks
 			totalWrappedPages = (totalLinesEstimate + linesPerPage - 1) / linesPerPage;
 		}
 
-		auto drawPage = [&](int pageIdx, float px, float py, float pw)
+		bool leftRipped = IsPageRipped(s_currentBook, leftPage);
+		bool rightRipped = IsPageRipped(s_currentBook, rightPage);
+
+		float leftX = bx + margin;
+		float rightX = bx + bookW * 0.5f + margin * 0.5f;
+
+		ImVec2 leftMin{ leftX, by + margin };
+		ImVec2 leftMax{ leftX + pageW, by + bookH - margin };
+		ImVec2 rightMin{ rightX, by + margin };
+		ImVec2 rightMax{ rightX + pageW, by + bookH - margin };
+
+		auto drawPage = [&](int pageIdx, float px, float py, float pw, bool ripped)
 		{
+			if (ripped)
+			{
+				bool isLeft = (pageIdx % 2 == 0);
+				ImVec2 pgMin{ px, py };
+				ImVec2 pgMax{ px + pw, py + bookH - margin * 2.f };
+				DrawRippedPageSlot(dl, pgMin, pgMax, isLeft);
+
+				const char* msg = WJConfig::Sheet_PageRipped.c_str();
+				ImVec2 msz = f->CalcTextSizeA(fontSize * 1.1f, FLT_MAX, 0.f, msg);
+				dl->AddText(f, fontSize * 1.1f,
+					{ px + pw * 0.5f - msz.x * 0.5f, py + (bookH - margin * 2.f) * 0.5f - msz.y * 0.5f },
+					IM_COL32(76, 62, 48, 200), msg);
+				return;
+			}
+
 			int startLine = pageIdx * linesPerPage;
-			float ty = py + margin;
+			float ty = py;
+
+			int absLineOffset = book.lazyStartLine;
+
 			for (int l = 0; l < linesPerPage && (startLine + l) < (int)wrappedLines.size(); ++l)
 			{
 				const std::string& line = wrappedLines[startLine + l];
@@ -877,20 +920,78 @@ namespace CustomBooks
 					ImVec2 ls = f->CalcTextSizeA(fontSize, pw, 0.f, line.c_str());
 					tx = px + pw * 0.5f - ls.x * 0.5f;
 				}
-				dl->AddText(f, fontSize, { tx, ty }, inkCol, line.c_str(), nullptr, pw);
+
+				int actualLineIdx = absLineOffset + startLine + l;
+				bool hasEdit = false;
+				for (const auto& edit : book.edits)
+				{
+					if (edit.lineIndex == actualLineIdx)
+					{
+						hasEdit = true;
+
+						std::string before = line.substr(0, edit.startChar);
+						std::string target = line.substr(edit.startChar, edit.endChar - edit.startChar);
+						std::string after = line.substr(edit.endChar);
+
+						float beforeW = 0.f;
+						if (!before.empty())
+						{
+							ImVec2 bsz = f->CalcTextSizeA(fontSize, FLT_MAX, 0.f, before.c_str());
+							beforeW = bsz.x;
+							dl->AddText(f, fontSize, { tx, ty }, inkCol, before.c_str());
+						}
+
+						float targetW = 0.f;
+						if (!target.empty())
+						{
+							ImVec2 tsz = f->CalcTextSizeA(fontSize, FLT_MAX, 0.f, target.c_str());
+							targetW = tsz.x;
+							float strikeY = ty + fontSize * 0.5f;
+							dl->AddText(f, fontSize, { tx + beforeW, ty }, IM_COL32(120, 100, 80, 180), target.c_str());
+							dl->AddLine({ tx + beforeW, strikeY }, { tx + beforeW + targetW, strikeY }, IM_COL32(120, 50, 30, 220), 1.5f);
+						}
+
+						if (!edit.replacementText.empty())
+						{
+							float smallSize = fontSize * 0.6f;
+							float repY = ty - smallSize * 0.8f;
+							dl->AddText(f, smallSize, { tx + beforeW, repY }, IM_COL32(48, 38, 30, 230), edit.replacementText.c_str());
+						}
+
+						float afterX = tx + beforeW + targetW;
+						if (!after.empty())
+						{
+							dl->AddText(f, fontSize, { afterX, ty }, inkCol, after.c_str());
+						}
+						break;
+					}
+				}
+
+				if (!hasEdit)
+				{
+					dl->AddText(f, fontSize, { tx, ty }, inkCol, line.c_str(), nullptr, pw);
+				}
+
 				ty += lineH;
 			}
 			char pnum[16];
 			snprintf(pnum, sizeof(pnum), "- %d -", pageIdx + 1);
 			ImVec2 pns = f->CalcTextSizeA(fontSize * 0.8f, FLT_MAX, 0.f, pnum);
-			dl->AddText(f, fontSize * 0.8f, { px + pw * 0.5f - pns.x * 0.5f, py + bookH - margin - fontSize }, IM_COL32(150, 140, 130, 200), pnum);
+			dl->AddText(f, fontSize * 0.8f, { px + pw * 0.5f - pns.x * 0.5f, py + bookH - margin * 2.f - fontSize }, IM_COL32(150, 140, 130, 200), pnum);
 		};
 
-		float leftX = bx + margin;
-		float rightX = bx + bookW * 0.5f + margin * 0.5f;
-		drawPage(leftPage, leftX, by, pageW);
+		drawPage(leftPage, leftX, by + margin, pageW, leftRipped);
 		if (rightPage < totalWrappedPages)
-			drawPage(rightPage, rightX, by, pageW);
+			drawPage(rightPage, rightX, by + margin, pageW, rightRipped);
+
+		if (s_cbSelectedPage >= 0)
+		{
+			const float pulse = 0.5f + 0.5f * std::sin((float)ImGui::GetTime() * 4.0f);
+			if (s_cbSelectedPage == leftPage && !leftRipped)
+				DrawPageGlow(dl, { leftX, by + margin }, { leftX + pageW, by + bookH - margin }, pulse);
+			else if (s_cbSelectedPage == rightPage && !rightRipped)
+				DrawPageGlow(dl, { rightX, by + margin }, { rightX + pageW, by + bookH - margin }, pulse);
+		}
 
 		const char* btitle = book.config.displayTitle.c_str();
 		ImVec2 bts = f->CalcTextSizeA(f->FontSize * 1.2f, FLT_MAX, 0.f, btitle);
@@ -928,21 +1029,171 @@ namespace CustomBooks
 			}
 		}
 
-		const char* hint = WJConfig::CB_BookNavHint.c_str();
-		ImVec2 hs = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, hint);
-		dl->AddText(f, f->FontSize, { ds.x * 0.5f - hs.x * 0.5f, ds.y * 0.93f }, IM_COL32(200, 200, 200, 200), hint);
+		std::string hintStr = WJConfig::CB_BookNavHint;
+		if (s_cbSelectedPage >= 0)
+		{
+			hintStr += "   |   P: Rip Page   |   E: Edit   |   ESC: Deselect";
+		}
+		ImVec2 hs = f->CalcTextSizeA(f->FontSize, FLT_MAX, 0.f, hintStr.c_str());
+		dl->AddText(f, f->FontSize, { ds.x * 0.5f - hs.x * 0.5f, ds.y * 0.93f }, IM_COL32(200, 200, 200, 200), hintStr.c_str());
+
+		if (s_cbEditMode)
+		{
+			const float editW = 300.f;
+			const float editH = 30.f;
+			ImVec2 editPos{ ds.x * 0.5f - editW * 0.5f, ds.y * 0.15f };
+			dl->AddRectFilled(editPos, { editPos.x + editW, editPos.y + editH }, IM_COL32(30, 25, 20, 240), 4.f);
+			dl->AddRect(editPos, { editPos.x + editW, editPos.y + editH }, IM_COL32(180, 140, 90, 200), 4.f, 0, 2.f);
+			dl->AddText(f, fontSize * 0.8f, { editPos.x + 8.f, editPos.y + 8.f }, IM_COL32(234, 223, 197, 255), s_cbEditBuffer);
+
+			const char* editHint = "Type replacement   |   ENTER: Confirm   |   ESC: Cancel";
+			ImVec2 ehs = f->CalcTextSizeA(f->FontSize * 0.8f, FLT_MAX, 0.f, editHint);
+			dl->AddText(f, f->FontSize * 0.8f, { ds.x * 0.5f - ehs.x * 0.5f, editPos.y + editH + 8.f }, IM_COL32(200, 180, 140, 200), editHint);
+		}
 
 		if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, false))
 		{
-			int maxPage = totalWrappedPages / 2;
-			if (s_currentPage < maxPage)
-				s_currentPage++;
+			if (s_cbSelectedPage >= 0)
+			{
+				if (s_cbSelectedPage == leftPage && !rightRipped)
+					s_cbSelectedPage = rightPage;
+				else if (s_cbSelectedPage == rightPage)
+				{
+					int maxPage = totalWrappedPages / 2;
+					if (s_currentPage < maxPage)
+					{
+						s_currentPage++;
+						s_cbSelectedPage = s_currentPage * 2;
+					}
+				}
+			}
+			else
+			{
+				int maxPage = totalWrappedPages / 2;
+				if (s_currentPage < maxPage)
+					s_currentPage++;
+			}
 		}
 		if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false))
 		{
-			if (s_currentPage > 0) s_currentPage--;
+			if (s_cbSelectedPage >= 0)
+			{
+				if (s_cbSelectedPage == rightPage && !leftRipped)
+					s_cbSelectedPage = leftPage;
+				else if (s_cbSelectedPage == leftPage)
+				{
+					if (s_currentPage > 0)
+					{
+						s_currentPage--;
+						s_cbSelectedPage = s_currentPage * 2 + 1;
+					}
+				}
+			}
+			else
+			{
+				if (s_currentPage > 0) s_currentPage--;
+			}
 		}
-		if (ImGui::IsKeyPressed(ImGuiKey_K, false))
+
+		if (s_cbSelectedPage < 0)
+		{
+			if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+			{
+				ImVec2 mp = io.MousePos;
+				bool clickLeft = mp.x >= leftX && mp.x <= leftX + pageW && mp.y >= by + margin && mp.y <= by + bookH - margin;
+				bool clickRight = mp.x >= rightX && mp.x <= rightX + pageW && mp.y >= by + margin && mp.y <= by + bookH - margin;
+
+				if (clickLeft && !leftRipped)
+					s_cbSelectedPage = leftPage;
+				else if (clickRight && !rightRipped)
+					s_cbSelectedPage = rightPage;
+			}
+		}
+		else
+		{
+			if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+			{
+				s_cbSelectedPage = -1;
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_P, false))
+			{
+				if (!IsPageRipped(s_currentBook, s_cbSelectedPage))
+				{
+					int partner = Sheets::GetPartnerPage(s_cbSelectedPage);
+					std::string pageText;
+					int startLine = s_cbSelectedPage * linesPerPage;
+					for (int l = 0; l < linesPerPage && (startLine + l) < (int)wrappedLines.size(); ++l)
+					{
+						if (!pageText.empty()) pageText += "\n";
+						pageText += wrappedLines[startLine + l];
+					}
+
+					Sheets::StartRipPage(pageText, SheetDrawing(), s_cbSelectedPage, false, s_currentBook, 1);
+				}
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_E, false))
+			{
+				s_cbEditMode = true;
+				s_cbEditBuffer[0] = '\0';
+			}
+		}
+
+		if (s_cbEditMode)
+		{
+			for (int vk = 'A'; vk <= 'Z'; ++vk)
+			{
+				if (ImGui::IsKeyPressed((ImGuiKey)vk, false))
+				{
+					int len = (int)strlen(s_cbEditBuffer);
+					if (len < (int)sizeof(s_cbEditBuffer) - 1)
+					{
+						char c = (char)vk;
+						if (!(GetAsyncKeyState(VK_SHIFT) & 0x8000))
+							c = (char)std::tolower((unsigned char)c);
+						s_cbEditBuffer[len] = c;
+						s_cbEditBuffer[len + 1] = 0;
+					}
+				}
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_Backspace, false))
+			{
+				int len = (int)strlen(s_cbEditBuffer);
+				if (len > 0)
+					s_cbEditBuffer[len - 1] = 0;
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_Space, false))
+			{
+				int len = (int)strlen(s_cbEditBuffer);
+				if (len < (int)sizeof(s_cbEditBuffer) - 1)
+				{
+					s_cbEditBuffer[len] = ' ';
+					s_cbEditBuffer[len + 1] = 0;
+				}
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_Enter, false))
+			{
+				if (strlen(s_cbEditBuffer) > 0 && s_cbSelectedPage >= 0)
+				{
+					TextEdit edit;
+					int startLine = s_cbSelectedPage * linesPerPage;
+					edit.lineIndex = book.lazyStartLine + startLine;
+					edit.startChar = 0;
+					edit.endChar = 10;
+					edit.originalText = "text";
+					edit.replacementText = s_cbEditBuffer;
+					AddEdit(s_currentBook, edit);
+				}
+				s_cbEditMode = false;
+				s_cbEditBuffer[0] = '\0';
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+			{
+				s_cbEditMode = false;
+				s_cbEditBuffer[0] = '\0';
+			}
+		}
+
+		if (ImGui::IsKeyPressed(ImGuiKey_K, false) && s_cbSelectedPage < 0)
 		{
 			auto bmIt = s_bookmarks.find(s_currentBook);
 			if (bmIt != s_bookmarks.end() && bmIt->second == s_currentPage)
@@ -960,7 +1211,7 @@ namespace CustomBooks
 				s_ribbonAnim.placing = true;
 			}
 		}
-		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) && s_cbSelectedPage < 0 && !s_cbEditMode)
 		{
 			CloseBook();
 			OpenInventory();
@@ -1282,5 +1533,142 @@ namespace CustomBooks
 			}
 		}
 		return lineIndex;
+	}
+
+	bool IsPageRipped(const std::string& bookName, int page)
+	{
+		auto it = s_rippedCustomBookPages.find(bookName);
+		if (it == s_rippedCustomBookPages.end()) return false;
+		return it->second.count(page) > 0;
+	}
+
+	void RipPage(const std::string& bookName, int page)
+	{
+		s_rippedCustomBookPages[bookName].insert(page);
+		int partner = Sheets::GetPartnerPage(page);
+		if (partner > 0)
+			s_rippedCustomBookPages[bookName].insert(partner);
+	}
+
+	void RestorePage(const std::string& bookName, int page)
+	{
+		auto it = s_rippedCustomBookPages.find(bookName);
+		if (it == s_rippedCustomBookPages.end()) return;
+		it->second.erase(page);
+		int partner = Sheets::GetPartnerPage(page);
+		if (partner > 0)
+			it->second.erase(partner);
+	}
+
+	void LoadEdits(const std::string& bookName)
+	{
+		auto it = s_loadedBooks.find(bookName);
+		if (it == s_loadedBooks.end()) return;
+		auto& book = it->second;
+		book.edits.clear();
+
+		fs::path editsPath = GetBooksDir() / bookName / "edits.txt";
+		std::ifstream f(editsPath);
+		if (!f) return;
+
+		std::string line;
+		while (std::getline(f, line))
+		{
+			line = Trim(line);
+			if (line.empty() || line[0] == ';') continue;
+
+			TextEdit edit;
+			size_t pos1 = line.find('|');
+			if (pos1 == std::string::npos) continue;
+			edit.lineIndex = std::stoi(Trim(line.substr(0, pos1)));
+
+			size_t pos2 = line.find('|', pos1 + 1);
+			if (pos2 == std::string::npos) continue;
+			edit.startChar = std::stoi(Trim(line.substr(pos1 + 1, pos2 - pos1 - 1)));
+
+			size_t pos3 = line.find('|', pos2 + 1);
+			if (pos3 == std::string::npos) continue;
+			edit.endChar = std::stoi(Trim(line.substr(pos2 + 1, pos3 - pos2 - 1)));
+
+			size_t pos4 = line.find('|', pos3 + 1);
+			if (pos4 == std::string::npos) continue;
+			edit.originalText = Trim(line.substr(pos3 + 1, pos4 - pos3 - 1));
+			edit.replacementText = Trim(line.substr(pos4 + 1));
+
+			book.edits.push_back(edit);
+		}
+	}
+
+	void SaveEdits(const std::string& bookName)
+	{
+		auto it = s_loadedBooks.find(bookName);
+		if (it == s_loadedBooks.end()) return;
+		auto& book = it->second;
+
+		fs::path editsPath = GetBooksDir() / bookName / "edits.txt";
+		std::ofstream f(editsPath, std::ios::trunc);
+		if (!f) return;
+
+		for (const auto& edit : book.edits)
+		{
+			f << edit.lineIndex << "|" << edit.startChar << "|" << edit.endChar
+			  << "|" << edit.originalText << "|" << edit.replacementText << "\n";
+		}
+	}
+
+	void AddEdit(const std::string& bookName, const TextEdit& edit)
+	{
+		auto it = s_loadedBooks.find(bookName);
+		if (it == s_loadedBooks.end()) return;
+		it->second.edits.push_back(edit);
+		SaveEdits(bookName);
+	}
+
+	static void DrawPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float pulse)
+	{
+		const int alpha = (int)(130.f + 60.f * pulse);
+		const ImU32 glow = IM_COL32(0, 180, 255, std::clamp(alpha, 0, 255));
+		dl->AddRect({ mn.x - 3.f, mn.y - 3.f }, { mx.x + 3.f, mx.y + 3.f }, glow, 4.f, 0, 3.f);
+		dl->AddRect({ mn.x - 7.f, mn.y - 7.f }, { mx.x + 7.f, mx.y + 7.f },
+		            IM_COL32(0, 180, 255, (int)((130.f + 60.f * pulse) * 0.4f)), 5.f, 0, 1.5f);
+	}
+
+	static void DrawRippedPageSlot(ImDrawList* dl, ImVec2 pgMin, ImVec2 pgMax, bool isLeft)
+	{
+		unsigned seed = isLeft ? 1234u : 5678u;
+		float jagSize = 6.f;
+		float step = 10.f;
+
+		auto rng = [](unsigned& s) -> float {
+			s = s * 1664525u + 1013904223u;
+			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
+		};
+
+		dl->AddRectFilled(pgMin, pgMax, IM_COL32(180, 165, 135, 120));
+
+		std::vector<ImVec2> tornEdge;
+		if (isLeft)
+		{
+			tornEdge.push_back(pgMax);
+			tornEdge.push_back({ pgMax.x, pgMin.y });
+			for (float y = pgMin.y; y <= pgMax.y; y += step)
+			{
+				float jx = pgMax.x - (rng(seed) * jagSize);
+				tornEdge.push_back({ jx, y });
+			}
+		}
+		else
+		{
+			tornEdge.push_back(pgMin);
+			tornEdge.push_back({ pgMin.x, pgMax.y });
+			for (float y = pgMax.y; y >= pgMin.y; y -= step)
+			{
+				float jx = pgMin.x + (rng(seed) * jagSize);
+				tornEdge.push_back({ jx, y });
+			}
+		}
+
+		if (tornEdge.size() >= 3)
+			dl->AddConvexPolyFilled(tornEdge.data(), (int)tornEdge.size(), IM_COL32(210, 200, 175, 200));
 	}
 }

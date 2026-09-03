@@ -33,18 +33,28 @@ struct BookChapter
 	int lineIndex = 0;
 };
 
-	struct CustomBook
-	{
-		std::string internalName;
-		BookConfig config;
-		std::vector<std::string> lines;
-		std::vector<BookChapter> chapters;
-		bool loaded = false;
-		int lazyStartLine = 0;
-		int lazyLoadedCount = 0;
-		int lazyTotalLines = 0;
-		int lazyTotalChars = 0;
-	};
+struct TextEdit
+{
+	int lineIndex = 0;
+	int startChar = 0;
+	int endChar = 0;
+	std::string originalText;
+	std::string replacementText;
+};
+
+struct CustomBook
+{
+	std::string internalName;
+	BookConfig config;
+	std::vector<std::string> lines;
+	std::vector<BookChapter> chapters;
+	std::vector<TextEdit> edits;
+	bool loaded = false;
+	int lazyStartLine = 0;
+	int lazyLoadedCount = 0;
+	int lazyTotalLines = 0;
+	int lazyTotalChars = 0;
+};
 
 struct RibbonAnim
 {
@@ -91,4 +101,12 @@ namespace CustomBooks
 
 	void MarkChapterAsRipped(const std::string& bookName, int lineIndex);
 	int GetNextValidLineIndex(const std::string& bookName, int lineIndex);
+
+	bool IsPageRipped(const std::string& bookName, int page);
+	void RipPage(const std::string& bookName, int page);
+	void RestorePage(const std::string& bookName, int page);
+
+	void AddEdit(const std::string& bookName, const TextEdit& edit);
+	void LoadEdits(const std::string& bookName);
+	void SaveEdits(const std::string& bookName);
 }

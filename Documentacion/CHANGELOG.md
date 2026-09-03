@@ -135,6 +135,17 @@
 - [ ] Navegar hacia atras y adelante -> chunks se cargan correctamente
 - [ ] Abrir libro grande en pagina aleatoria (R) -> lazy loading funciona desde esa pagina
 
+#### CustomBooks - Page Selection + Glow + Rip + Edit (NUEVO)
+- [ ] Abrir un custombook -> hacer click en una pagina -> glow azul pulsante aparece
+- [ ] Con pagina seleccionada -> flechas izq/der mueven seleccion entre paginas individuales
+- [ ] Con pagina seleccionada -> P -> arranca la pagina (overlay con contenido)
+- [ ] Con pagina seleccionada -> E -> modo edicion (cuadro de texto arriba)
+- [ ] Escribir texto + ENTER -> texto tachado aparece en la pagina original con correccion arriba en pequeno
+- [ ] Verificar que edits.txt se crea en la carpeta del libro
+- [ ] Reabrir el libro -> las ediciones siguen visibles
+- [ ] Paginas ripeadas en custombook -> muestran borde rasgado + "Page Ripped"
+- [ ] ESC deselecciona pagina -> vuelve a navegacion normal por pares
+
 #### Journal - Bookmark
 - [ ] "Bookmark Saved / Deleted" aparece 6px mas abajo que antes (solo en journal)
 
