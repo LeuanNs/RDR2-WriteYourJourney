@@ -1,5 +1,47 @@
 # Changelog - Write Your Journey
 
+## [Build - Testing Fixes Batch 7] - 2026-09-03
+
+### Fixes based on testing feedback (Batch 7)
+
+**Fix 1: Restored page damage overlay now draws OVER text**
+- Changed from `GetBackgroundDrawList()` to `GetForegroundDrawList()` for damage overlay
+- Damage marks (wrinkles, stains, tears) now render on top of page text content
+- Applied to both journal and custombooks
+
+**Fix 2: KeepSheet now restores page to original journal/custombook**
+- When pressing K on a discoverable sheet, the page is now restored to its original location
+- Added logic in `KeepSheet()` to mark the original page as restored (with damaged visual)
+- Page will show the wrinkled/torn visual when viewed in journal/custombook after keeping
+
+**Fix 3: Index reverted to I then ENTER**
+- Reverted Index opening to require I key first, then ENTER to confirm
+- Added `s_indexPending` flag to track when I is pressed
+- This fixes the bug where opening Index directly caused issues
+
+**Fix 4: Random page lazy loading fixed**
+- Fixed targetLine calculation: removed incorrect `* 2` multiplier
+- Now correctly loads the chunk for the random page in large books
+
+**Fix 5: Improved ripped page visuals**
+- Journal: Added "Page Ripped" text overlay on torn page slots
+- Both journal and custombooks: Enhanced torn edge with larger jag size (8 vs 6), more stains (8 vs 5), and added scratch marks (3 diagonal lines)
+- Darker background color for better contrast
+
+**Fix 6: Mouse cursor handling**
+- Journal: Mouse cursor disabled when in Read mode with page selected (keyboard navigation only)
+- CustomBooks: Mouse cursor enabled when inventory is open (for search bar interaction)
+- Added `#include "menu.h"` to custombooks.cpp for `SetShouldDrawMouse()` access
+
+### Archivos modificados
+- `src/ImGuiRDR2Hook/menu.cpp` - Foreground draw list for damage overlay, "Page Ripped" text, improved torn slot visual, mouse disable in Read mode
+- `src/ImGuiRDR2Hook/custombooks.cpp` - Foreground draw list for damage overlay, improved torn slot visual, Index I+ENTER flow, random page fix, mouse enable in inventory
+- `src/ImGuiRDR2Hook/sheets.cpp` - KeepSheet restores page to original journal/custombook
+- `Documentacion/CHANGELOG.md` - Actualizado con Batch 7
+- `Testing.md` - Actualizado con Batch 7
+
+---
+
 ## [Build - Testing Fixes Batch 6] - 2026-09-03
 
 ### Fixes based on testing feedback (Batch 6)
