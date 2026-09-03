@@ -1262,21 +1262,27 @@ namespace CustomBooks
 				{
 					int partner = Sheets::GetPartnerPage(s_cbSelectedPage + 1) - 1;
 					std::string pageText;
-					int startLine = s_cbSelectedPage * linesPerPage;
-					for (int l = 0; l < linesPerPage && (startLine + l) < (int)wrappedLines.size(); ++l)
+					int startLine = s_cbSelectedPage * linesPerPage - book.lazyStartLine;
+					if (startLine >= 0 && startLine < (int)wrappedLines.size())
 					{
-						if (!pageText.empty()) pageText += "\n";
-						pageText += wrappedLines[startLine + l];
+						for (int l = 0; l < linesPerPage && (startLine + l) < (int)wrappedLines.size(); ++l)
+						{
+							if (!pageText.empty()) pageText += "\n";
+							pageText += wrappedLines[startLine + l];
+						}
 					}
 
 					std::string backText;
 					if (partner > 0 && !IsPageRipped(s_currentBook, partner))
 					{
-						int partnerStartLine = partner * linesPerPage;
-						for (int l = 0; l < linesPerPage && (partnerStartLine + l) < (int)wrappedLines.size(); ++l)
+						int partnerStartLine = partner * linesPerPage - book.lazyStartLine;
+						if (partnerStartLine >= 0 && partnerStartLine < (int)wrappedLines.size())
 						{
-							if (!backText.empty()) backText += "\n";
-							backText += wrappedLines[partnerStartLine + l];
+							for (int l = 0; l < linesPerPage && (partnerStartLine + l) < (int)wrappedLines.size(); ++l)
+							{
+								if (!backText.empty()) backText += "\n";
+								backText += wrappedLines[partnerStartLine + l];
+							}
 						}
 					}
 
@@ -1826,9 +1832,9 @@ namespace CustomBooks
 		float t = (damageCount - 1) / 4.f;
 		if (t < 0.f) t = 0.f;
 		if (t > 1.f) t = 1.f;
-		int r = (int)(192.f + t * (160.f - 192.f));
-		int g = (int)(183.f + t * (150.f - 183.f));
-		int b = (int)(160.f + t * (130.f - 160.f));
+		int r = (int)(200.f + t * (170.f - 200.f));
+		int g = (int)(190.f + t * (160.f - 190.f));
+		int b = (int)(167.f + t * (140.f - 167.f));
 		dl->AddRectFilled(mn, mx, IM_COL32(r, g, b, 255));
 	}
 
@@ -1843,33 +1849,46 @@ namespace CustomBooks
 			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
 		};
 
+		dl->PushClipRect(mn, mx, true);
+
 		int wrinkleAlpha = (int)(60.f + intensity * 120.f);
 		int stainAlpha = (int)(40.f + intensity * 100.f);
 		int tearAlpha = (int)(80.f + intensity * 140.f);
 
+		float pageW = mx.x - mn.x;
+		float pageH = mx.y - mn.y;
+
 		for (int i = 0; i < 14; ++i)
 		{
-			float y1 = mn.y + (mx.y - mn.y) * rng(seed);
+			float y1 = mn.y + pageH * rng(seed);
 			float y2 = y1 + (rng(seed) - 0.5f) * 30.f;
-			float x1 = mn.x + rng(seed) * (mx.x - mn.x) * 0.2f;
-			float x2 = x1 + (mx.x - mn.x) * (0.5f + rng(seed) * 0.5f);
+			float x1 = mn.x + pageW * 0.2f * rng(seed);
+			float x2 = x1 + pageW * (0.5f + rng(seed) * 0.5f);
+			y1 = std::max(mn.y, std::min(mx.y, y1));
+			y2 = std::max(mn.y, std::min(mx.y, y2));
+			x1 = std::max(mn.x, std::min(mx.x, x1));
+			x2 = std::max(mn.x, std::min(mx.x, x2));
 			dl->AddLine({ x1, y1 }, { x2, y2 }, IM_COL32(140, 130, 110, wrinkleAlpha), 1.5f);
 		}
 
 		for (int i = 0; i < 8; ++i)
 		{
-			float cx = mn.x + rng(seed) * (mx.x - mn.x);
-			float cy = mn.y + rng(seed) * (mx.y - mn.y);
+			float cx = mn.x + pageW * rng(seed);
+			float cy = mn.y + pageH * rng(seed);
 			float r = 4.f + rng(seed) * 12.f;
 			dl->AddCircleFilled({ cx, cy }, r, IM_COL32(130, 120, 100, stainAlpha), 8);
 		}
 
 		for (int i = 0; i < 5; ++i)
 		{
-			float x1 = mn.x + rng(seed) * (mx.x - mn.x);
-			float y1 = mn.y + rng(seed) * (mx.y - mn.y);
+			float x1 = mn.x + pageW * rng(seed);
+			float y1 = mn.y + pageH * rng(seed);
 			float x2 = x1 + (rng(seed) - 0.5f) * 40.f;
 			float y2 = y1 + (rng(seed) - 0.5f) * 40.f;
+			x1 = std::max(mn.x, std::min(mx.x, x1));
+			y1 = std::max(mn.y, std::min(mx.y, y1));
+			x2 = std::max(mn.x, std::min(mx.x, x2));
+			y2 = std::max(mn.y, std::min(mx.y, y2));
 			dl->AddLine({ x1, y1 }, { x2, y2 }, IM_COL32(120, 110, 90, stainAlpha), 1.f);
 		}
 
@@ -1881,7 +1900,7 @@ namespace CustomBooks
 			for (float x = mx.x; x > mx.x - tearSize * 3.f; x -= 2.5f)
 			{
 				float jy = mn.y + (rng(seed) - 0.3f) * tearSize * 1.5f;
-				topTear.push_back({ x, jy });
+				topTear.push_back({ x, std::max(mn.y, std::min(mx.y, jy)) });
 			}
 			topTear.push_back({ mx.x - tearSize * 3.f, mn.y });
 		}
@@ -1891,7 +1910,7 @@ namespace CustomBooks
 			for (float x = mn.x; x < mn.x + tearSize * 3.f; x += 2.5f)
 			{
 				float jy = mn.y + (rng(seed) - 0.3f) * tearSize * 1.5f;
-				topTear.push_back({ x, jy });
+				topTear.push_back({ x, std::max(mn.y, std::min(mx.y, jy)) });
 			}
 			topTear.push_back({ mn.x + tearSize * 3.f, mn.y });
 		}
@@ -1905,7 +1924,7 @@ namespace CustomBooks
 			for (float x = mx.x; x > mx.x - tearSize * 2.5f; x -= 2.5f)
 			{
 				float jy = mx.y - (rng(seed) - 0.3f) * tearSize * 1.5f;
-				bottomTear.push_back({ x, jy });
+				bottomTear.push_back({ x, std::max(mn.y, std::min(mx.y, jy)) });
 			}
 			bottomTear.push_back({ mx.x - tearSize * 2.5f, mx.y });
 		}
@@ -1915,7 +1934,7 @@ namespace CustomBooks
 			for (float x = mn.x; x < mn.x + tearSize * 2.5f; x += 2.5f)
 			{
 				float jy = mx.y - (rng(seed) - 0.3f) * tearSize * 1.5f;
-				bottomTear.push_back({ x, jy });
+				bottomTear.push_back({ x, std::max(mn.y, std::min(mx.y, jy)) });
 			}
 			bottomTear.push_back({ mn.x + tearSize * 2.5f, mx.y });
 		}
@@ -1925,20 +1944,39 @@ namespace CustomBooks
 		for (int i = 0; i < 6; ++i)
 		{
 			float sx = isLeft ? (mx.x - 3.f - rng(seed) * 20.f) : (mn.x + 3.f + rng(seed) * 20.f);
-			float sy = mn.y + (mx.y - mn.y) * (0.1f + rng(seed) * 0.8f);
+			float sy = mn.y + pageH * (0.1f + rng(seed) * 0.8f);
 			float sLen = 8.f + rng(seed) * 16.f;
 			float sAngle = (rng(seed) - 0.5f) * 0.7f;
-			dl->AddLine({ sx, sy }, { sx + std::cos(sAngle) * sLen, sy + std::sin(sAngle) * sLen },
-			            IM_COL32(100, 90, 70, tearAlpha), 2.f);
+			float ex = sx + std::cos(sAngle) * sLen;
+			float ey = sy + std::sin(sAngle) * sLen;
+			sx = std::max(mn.x, std::min(mx.x, sx));
+			sy = std::max(mn.y, std::min(mx.y, sy));
+			ex = std::max(mn.x, std::min(mx.x, ex));
+			ey = std::max(mn.y, std::min(mx.y, ey));
+			dl->AddLine({ sx, sy }, { ex, ey }, IM_COL32(100, 90, 70, tearAlpha), 2.f);
 		}
 
 		for (int i = 0; i < 4; ++i)
 		{
-			float cx = mn.x + (mx.x - mn.x) * (0.1f + rng(seed) * 0.8f);
-			float cy = mn.y + (mx.y - mn.y) * (0.1f + rng(seed) * 0.8f);
+			float cx = mn.x + pageW * (0.1f + rng(seed) * 0.8f);
+			float cy = mn.y + pageH * (0.1f + rng(seed) * 0.8f);
 			float r = 5.f + rng(seed) * 12.f;
 			dl->AddCircleFilled({ cx, cy }, r, IM_COL32(150, 140, 115, 70), 12);
 		}
+
+		if (damageCount >= 5)
+		{
+			for (int i = 0; i < 3; ++i)
+			{
+				float cx = mn.x + pageW * (0.2f + rng(seed) * 0.6f);
+				float cy = mn.y + pageH * (0.2f + rng(seed) * 0.6f);
+				float chunkW = 8.f + rng(seed) * 12.f;
+				float chunkH = 6.f + rng(seed) * 10.f;
+				dl->AddRectFilled({ cx - chunkW * 0.5f, cy - chunkH * 0.5f }, { cx + chunkW * 0.5f, cy + chunkH * 0.5f }, IM_COL32(40, 35, 30, 180), 2.f);
+			}
+		}
+
+		dl->PopClipRect();
 	}
 
 	static void DrawRippedPageSlot(ImDrawList* dl, ImVec2 pgMin, ImVec2 pgMax, bool isLeft)
@@ -1951,6 +1989,8 @@ namespace CustomBooks
 			s = s * 1664525u + 1013904223u;
 			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
 		};
+
+		dl->PushClipRect(pgMin, pgMax, true);
 
 		dl->AddRectFilled(pgMin, pgMax, IM_COL32(80, 75, 70, 200));
 
@@ -2003,5 +2043,7 @@ namespace CustomBooks
 				dl->AddText(df, qSize, { jx, jy }, IM_COL32(140, 135, 125, 100), "?");
 			}
 		}
+
+		dl->PopClipRect();
 	}
 }
