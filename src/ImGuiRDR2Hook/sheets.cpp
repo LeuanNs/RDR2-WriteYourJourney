@@ -310,6 +310,7 @@ namespace Sheets
 
 	void Init()
 	{
+		if (!WJConfig::RipSheetsEnabled) return;
 		LoadRippedPagesIndex();
 		ScanSheets();
 	}
@@ -725,6 +726,8 @@ namespace Sheets
 
 	void UpdatePickupPrompt(float px, float py, float pz)
 	{
+		if (!WJConfig::RipSheetsEnabled) return;
+
 		std::lock_guard<std::mutex> lock(s_sheetsMutex);
 		s_nearbySheetId = -1;
 		s_showPickupPrompt = false;
@@ -787,6 +790,8 @@ namespace Sheets
 
 	void HandleInput()
 	{
+		if (!WJConfig::RipSheetsEnabled) return;
+
 		if (s_ripping)
 		{
 			bool pDown = (GetAsyncKeyState('P') & 0x8000) != 0;
@@ -1263,6 +1268,8 @@ namespace Sheets
 
 	void Render()
 	{
+		if (!WJConfig::RipSheetsEnabled) return;
+
 		if (s_showingOverlay)
 		{
 			ImGuiIO& io = ImGui::GetIO();
@@ -1320,6 +1327,7 @@ namespace Sheets
 
 	void RenderPickupPrompt()
 	{
+		if (!WJConfig::RipSheetsEnabled) return;
 		if (!s_showPickupPrompt || s_nearbySheetId < 0) return;
 		if (s_showingOverlay || s_ripping || s_ripAnimating) return;
 		if (s_eHoldActive || s_eHoldComplete) return;
@@ -1337,9 +1345,10 @@ namespace Sheets
 		float y = ds.y * 0.75f;
 		dl->AddText(f, f->FontSize * 1.2f, { ds.x * 0.5f - s1.x * 0.5f, y }, IM_COL32(234, 223, 197, 255), msg1);
 
+		char keyStr[2] = { WJConfig::RipSheetPickupKey, '\0' };
 		float keySize = 40.f;
 		ImVec2 keyCenter{ ds.x * 0.5f, y + f->FontSize * 1.5f + keySize * 0.5f + 5.f };
-		DrawKeyIcon(dl, df, "R", keyCenter, keySize, 0.f,
+		DrawKeyIcon(dl, df, keyStr, keyCenter, keySize, 0.f,
 			IM_COL32(20, 16, 12, 220),
 			IM_COL32(200, 185, 155, 220),
 			IM_COL32(255, 255, 255, 200),

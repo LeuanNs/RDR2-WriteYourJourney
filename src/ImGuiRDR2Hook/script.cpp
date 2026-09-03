@@ -454,24 +454,28 @@ void main()
 			if (Sheets::UpdateWalk(pos.x, pos.y, pos.z))
 			{
 				TASK::CLEAR_PED_TASKS(ped, TRUE, FALSE);
-				Sheets::StartCrouch();
-				if (STREAMING::HAS_ANIM_DICT_LOADED("amb_rest@world_human_bottle_pickup@male_a@base") == FALSE)
-				{
-					STREAMING::REQUEST_ANIM_DICT("amb_rest@world_human_bottle_pickup@male_a@base");
-					BUILTIN::SETTIMERA(0);
-					while (STREAMING::HAS_ANIM_DICT_LOADED("amb_rest@world_human_bottle_pickup@male_a@base") == FALSE && BUILTIN::TIMERA() < 1500)
+				try {
+					Sheets::StartCrouch();
+					if (STREAMING::HAS_ANIM_DICT_LOADED("amb_rest@world_human_bottle_pickup@male_a@base") == FALSE)
+					{
+						STREAMING::REQUEST_ANIM_DICT("amb_rest@world_human_bottle_pickup@male_a@base");
+						BUILTIN::SETTIMERA(0);
+						while (STREAMING::HAS_ANIM_DICT_LOADED("amb_rest@world_human_bottle_pickup@male_a@base") == FALSE && BUILTIN::TIMERA() < 1500)
+							WAIT(0);
+					}
+					if (STREAMING::HAS_ANIM_DICT_LOADED("amb_rest@world_human_bottle_pickup@male_a@base"))
+						TASK::TASK_PLAY_ANIM(ped, "amb_rest@world_human_bottle_pickup@male_a@base", "base", 2.0f, -2.0f, 1500, AF_HOLD_LAST_FRAME, 0.0f, FALSE, 0, FALSE, nullptr, FALSE);
+
+					while (!Sheets::UpdateCrouch())
+					{
+						LockControlsThisFrame();
 						WAIT(0);
-				}
-				if (STREAMING::HAS_ANIM_DICT_LOADED("amb_rest@world_human_bottle_pickup@male_a@base"))
-					TASK::TASK_PLAY_ANIM(ped, "amb_rest@world_human_bottle_pickup@male_a@base", "base", 2.0f, -2.0f, 1500, AF_HOLD_LAST_FRAME, 0.0f, FALSE, 0, FALSE, nullptr, FALSE);
+					}
 
-				while (!Sheets::UpdateCrouch())
-				{
-					LockControlsThisFrame();
-					WAIT(0);
+					TASK::CLEAR_PED_TASKS(ped, TRUE, FALSE);
+				} catch (...) {
+					TASK::CLEAR_PED_TASKS(ped, TRUE, FALSE);
 				}
-
-				TASK::CLEAR_PED_TASKS(ped, TRUE, FALSE);
 				Sheets::TryPickupSheet();
 
 				if (Sheets::IsShowingOverlay())
@@ -512,38 +516,27 @@ void main()
 			}
 			
 			Sheets::SetPlayerCoords(pos.x, pos.y, pos.z);
-			Sheets::UpdatePickupPrompt(pos.x, pos.y, pos.z);
-
-			if (Sheets::IsNearPickup())
+			if (WJConfig::RipSheetsEnabled)
 			{
-				bool rDown = (SafeGetAsyncKeyState('R') & 0x8000) != 0;
-				bool rJustPressed = (SafeGetAsyncKeyState('R') & 0x0001) != 0;
+				Sheets::UpdatePickupPrompt(pos.x, pos.y, pos.z);
 
-				if (rJustPressed && !Sheets::IsEHoldActive())
+				if (Sheets::IsNearPickup())
 				{
-					Sheets::StartEHold();
-				}
+					int pickupVK = (int)(unsigned char)WJConfig::RipSheetPickupKey;
+					bool keyJustPressed = (SafeGetAsyncKeyState(pickupVK) & 0x0001) != 0;
 
-				if (Sheets::IsEHoldActive())
-				{
-					if (!rDown)
+					if (keyJustPressed && !Sheets::IsWalkingToSheet())
 					{
-						Sheets::CancelEHold();
+						try {
+							Sheets::StartWalkToSheet();
+							float sx, sy, sz;
+							Sheets::GetNearbySheetCoords(sx, sy, sz);
+							TASK::TASK_GO_STRAIGHT_TO_COORD(ped, sx, sy, sz, 1.0f, -1, 0.0f, 0.5f, 0);
+						} catch (...) {
+							Sheets::CancelWalk();
+							TASK::CLEAR_PED_TASKS(ped, TRUE, FALSE);
+						}
 					}
-					else
-					{
-						Sheets::UpdatePickupPrompt(pos.x, pos.y, pos.z);
-						if (!Sheets::IsNearPickup())
-							Sheets::CancelEHold();
-					}
-				}
-
-				if (Sheets::IsEHoldComplete())
-				{
-					Sheets::StartWalkToSheet();
-					float sx, sy, sz;
-					Sheets::GetNearbySheetCoords(sx, sy, sz);
-					TASK::TASK_GO_STRAIGHT_TO_COORD(ped, sx, sy, sz, 1.0f, -1, 0.0f, 0.5f, 0);
 				}
 			}
 		}

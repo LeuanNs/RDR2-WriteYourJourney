@@ -21,6 +21,8 @@ namespace WJConfig
 	inline int  ReloadButton = VK_F5;
 	inline bool CustomBooksEnabled = true;
 	inline char CustomBooksKey = 'B';
+	inline bool RipSheetsEnabled = true;
+	inline char RipSheetPickupKey = 'R';
 
 	inline constexpr const char* FB_Help_Cover    = "ENTER: Open journal   |   Hold ESC 5s: Save and close";
 	inline constexpr const char* FB_Help_Overview = "Arrows: Focus page (2nd time: turn page)   |   ENTER: Select   |   Hold ESC 5s: Close";
@@ -181,6 +183,15 @@ namespace WJConfig
 			CustomBooksKey = (char)(buf[0] - 32);
 		else if (buf[0] >= 'A' && buf[0] <= 'Z')
 			CustomBooksKey = buf[0];
+
+		GetPrivateProfileStringA("RipSheets", "enableRipSheetSystem", "1", buf, sizeof(buf), iniPath.c_str());
+		RipSheetsEnabled = (std::atoi(buf) != 0);
+
+		GetPrivateProfileStringA("RipSheets", "ripSheetPickupKey", "R", buf, sizeof(buf), iniPath.c_str());
+		if (buf[0] >= 'a' && buf[0] <= 'z')
+			RipSheetPickupKey = (char)(buf[0] - 32);
+		else if (buf[0] >= 'A' && buf[0] <= 'Z')
+			RipSheetPickupKey = buf[0];
 
 		auto loadStr = [&](const char* key, const char* fallback, std::string& out) {
 			GetPrivateProfileStringA("Localization", key, fallback, buf, sizeof(buf), iniPath.c_str());

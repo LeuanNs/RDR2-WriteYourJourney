@@ -1,5 +1,81 @@
 # Changelog - Write Your Journey
 
+## [Build - Testing Fixes Batch 5] - 2026-09-03
+
+### Fixes based on Testing.md feedback (Batch 5)
+
+**Fix 1: Pickup con R - ahora es instantaneo (no requiere mantener)**
+- Cambiado el sistema de "mantener R por 3s" a "presionar R una vez"
+- Al presionar R, el personaje camina inmediatamente hacia la sheet, se agacha y muestra la hoja
+- Agregado try-catch alrededor de la caminata y la animacion de crouch
+- Si la animacion de crouch falla, el sistema no se rompe y continua normalmente
+- Si la caminata falla, se cancela limpiamente con CLEAR_PED_TASKS
+- La barra de progreso de hold ya no aparece (ahora es instantaneo)
+
+**Fix 2: Pagina restaurada - visual mejorado (mas daniada)**
+- Mejorado DrawRestoredPage() en journal y custombooks para ser mucho mas visible
+- Color base mas oscuro: (175,165,140) en vez de (195,185,160)
+- Lineas de arrugas aumentadas de 8 a 14, con mayor opacidad (120 vs 80) y grosor (1.5 vs 1.0)
+- Manchas de suciedad aumentadas de 5 a 8, con mayor radio (12 vs 8) y opacidad (90 vs 60)
+- Agregadas 5 lineas de "pliegues" cruzados para efecto de hoja arrugada
+- Bordes rasgados mas grandes (tearSize * 3 vs 2) y mas densos (step 2.5 vs 3)
+- Tajos laterales aumentados de 3 a 6, mas largos (16 vs 10) y gruesos (2.0 vs 1.5)
+- Agregadas 4 manchas circulares adicionales para efecto de hoja usada
+- La pagina restaurada ahora se ve claramente daniada: arrugada, sucia, con bordes rotos
+
+**Fix 3: Sistema de sheets configurable desde INI ([RipSheets])**
+- Agregada seccion [RipSheets] en WriteYourJourney.ini
+- `enableRipSheetSystem=1` (1=activado, 0=desactivado) - controla todo el sistema de sheets
+- `ripSheetPickupKey=R` (configurable A-Z) - tecla para recoger sheets del suelo
+- Al cambiar la tecla, se actualiza automaticamente el icono mostrado en el prompt
+- Si enableRipSheetSystem=0:
+  - No se inicializa el sistema de sheets (Sheets::Init() retorna inmediatamente)
+  - No aparece el prompt de pickup al acercarse a una sheet
+  - No se puede arrancar paginas con P (en journal ni custombooks)
+  - No se renderiza nada del sistema de sheets
+  - El texto "P: Rip Page" desaparece de la ayuda del journal y custombooks
+
+### Archivos modificados
+- `src/ImGuiRDR2Hook/config.h` - Agregadas variables RipSheetsEnabled y RipSheetPickupKey, parsing de [RipSheets]
+- `src/ImGuiRDR2Hook/script.cpp` - Pickup instantaneo con R, try-catch en walk/crouch, gate RipSheetsEnabled
+- `src/ImGuiRDR2Hook/sheets.cpp` - Gate RipSheetsEnabled en Init/HandleInput/Render/UpdatePickupPrompt/RenderPickupPrompt, key configurable en prompt
+- `src/ImGuiRDR2Hook/menu.cpp` - DrawRestoredPage mejorado, gate P key y help text con RipSheetsEnabled
+- `src/ImGuiRDR2Hook/custombooks.cpp` - DrawRestoredPage mejorado, gate P key y hint text con RipSheetsEnabled
+- `Documentacion/CHANGELOG.md` - Actualizado con Batch 5
+- `Testing.md` - Actualizado con Batch 5
+
+### Checklist de Testing
+
+#### Pickup instantaneo con R
+- [ ] Caminar por el mundo -> acercarse a una sheet -> aparece icono de tecla configurable
+- [ ] Presionar R una vez (sin mantener) -> personaje camina inmediatamente hacia la sheet
+- [ ] Al llegar -> personaje se agacha (crouch animation)
+- [ ] Al terminar crouch -> hoja se muestra + controles bloqueados
+- [ ] Si la animacion de crouch falla -> no se rompe todo, continua normalmente
+- [ ] Moverse mientras personaje camina -> se cancela limpiamente
+
+#### Pagina restaurada - Visual mejorado
+- [ ] Rippear pagina del journal -> presionar ESC en overlay -> animacion de hoja volviendo
+- [ ] Pagina restaurada -> visual claramente daniada: arrugada, sucia, bordes rotos
+- [ ] Color mas oscuro que paginas normales
+- [ ] Lineas de arrugas visibles (14 lineas)
+- [ ] Manchas de suciedad visibles (8 manchas)
+- [ ] Bordes rasgados grandes y densos
+- [ ] Tajos laterales visibles (6 tajos)
+- [ ] Rippear pagina de custombook -> presionar ESC -> mismo visual mejorado
+
+#### [RipSheets] Configuracion INI
+- [ ] Agregar [RipSheets] con enableRipSheetSystem=0 -> sistema completamente desactivado
+- [ ] Con sistema desactivado -> no aparece prompt de pickup
+- [ ] Con sistema desactivado -> P no arranca paginas en journal
+- [ ] Con sistema desactivado -> P no arranca paginas en custombooks
+- [ ] Con sistema desactivado -> "P: Rip Page" no aparece en ayuda
+- [ ] Cambiar ripSheetPickupKey=F -> icono muestra "F" en vez de "R"
+- [ ] Con tecla cambiada -> presionar F recoge la sheet (no R)
+- [ ] enableRipSheetSystem=1 (o sin seccion) -> sistema funciona normalmente
+
+---
+
 ## [Build - Testing Fixes Batch 4] - 2026-09-03
 
 ### Fixes based on Testing.md feedback (Batch 4)
