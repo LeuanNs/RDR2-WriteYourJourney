@@ -40,6 +40,8 @@ std::string CImGuiMenu::s_journalTitle = "Arthur's Journey";
 
 namespace
 {
+	void DrawRippedPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, float pulse);
+
 	// Mitigacion de antivirus: validar ventana activa antes de leer teclado
 	bool GameHasFocus()
 	{
@@ -547,8 +549,8 @@ namespace
 	ImU32 PageAmbientTint(float A)
 	{
 		if (!IsNightHour(s_worldHour.load()))
-			return 0;
-		return FadeCol(IM_COL32(50, 45, 35, 200), A);
+			return FadeCol(IM_COL32(100, 90, 75, 100), A);
+		return FadeCol(IM_COL32(60, 55, 45, 160), A);
 	}
 
 	void DrawRuledLines(ImDrawList* dl, const BookGeom& g,
@@ -754,12 +756,20 @@ namespace
 		bool rightRipped = Sheets::IsPageRipped(s_pagePair + 1, true);
 
 		if (leftRipped)
+		{
 			DrawRippedPageSlot(dl, g.leftMin, g.leftMax, A, true);
+			const float pulse = 0.5f + 0.5f * std::sin((float)ImGui::GetTime() * 4.0f);
+			DrawRippedPageGlow(dl, g.leftMin, g.leftMax, A, pulse);
+		}
 		else
 			dl->AddRectFilled(g.leftMin, g.leftMax, FadeCol(IM_COL32(210, 200, 175, 255), A));
 
 		if (rightRipped)
+		{
 			DrawRippedPageSlot(dl, g.rightMin, g.rightMax, A, false);
+			const float pulse = 0.5f + 0.5f * std::sin((float)ImGui::GetTime() * 4.0f);
+			DrawRippedPageGlow(dl, g.rightMin, g.rightMax, A, pulse);
+		}
 		else
 			dl->AddRectFilled(g.rightMin, g.rightMax, FadeCol(IM_COL32(205, 195, 168, 255), A));
 
@@ -971,6 +981,15 @@ namespace
 	//  vista general (sin pagina seleccionada todavia).
 	// -----------------------------------------------------------------
 	void DrawPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, float pulse)
+	{
+		const int alpha = (int)(A * (130.f + 60.f * pulse));
+		const ImU32 glow = IM_COL32(0, 180, 255, std::clamp(alpha, 0, 255));
+		dl->AddRect({ mn.x - 3.f, mn.y - 3.f }, { mx.x + 3.f, mx.y + 3.f }, glow, 4.f, 0, 3.f);
+		dl->AddRect({ mn.x - 7.f, mn.y - 7.f }, { mx.x + 7.f, mx.y + 7.f },
+		            FadeCol(glow, 0.4f), 5.f, 0, 1.5f);
+	}
+
+	void DrawRippedPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, float pulse)
 	{
 		const int alpha1 = (int)(A * (180.f + 75.f * pulse));
 		const int alpha2 = (int)(A * (140.f + 60.f * pulse));

@@ -16,6 +16,7 @@ namespace CustomBooks
 {
 	static std::vector<std::string> WrapText(const std::string& text, float maxWidth, ImFont* f, float fontSize);
 	static void DrawPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float pulse);
+	static void DrawRippedPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float pulse);
 	static void DrawRippedPageSlot(ImDrawList* dl, ImVec2 pgMin, ImVec2 pgMax, bool isLeft);
 
 	static std::vector<std::string> s_availableBooks;
@@ -780,22 +781,36 @@ namespace CustomBooks
 				const std::string& bookName = s_filteredBooks[s_selectedBookIdx];
 				LoadBook(bookName);
 				auto& book = s_loadedBooks[bookName];
-				std::string fullText;
-				for (const auto& line : book.lines)
-				{
-					if (!fullText.empty()) fullText += "\n";
-					fullText += line;
-				}
+				
 				ImFont* font = io.Fonts->Fonts[1] ? io.Fonts->Fonts[1] : io.Fonts->Fonts[0];
 				float fontSize = font->FontSize + book.config.fontSizeOverride;
 				if (fontSize < 10.f) fontSize = 10.f;
-				float bookW = ds.x * 0.6f;
+				float bookH = ds.y * 0.75f;
 				float margin = 30.f;
-				float pageW = bookW * 0.5f - margin * 1.5f;
-				auto wrapped = WrapText(fullText, pageW, font, fontSize);
-				int linesPerPage = (int)((ds.y * 0.75f - margin * 2.f) / (fontSize * 1.6f));
+				float pageTextH = bookH - margin * 2.f;
+				float lineH = fontSize * 1.6f;
+				int linesPerPage = (int)(pageTextH / lineH);
 				if (linesPerPage < 1) linesPerPage = 1;
-				int totalPages = (int)wrapped.size() / linesPerPage + 1;
+				
+				int totalPages;
+				if (book.lazyTotalChars > LAZY_CHAR_THRESHOLD)
+				{
+					totalPages = (book.lazyTotalLines + linesPerPage - 1) / linesPerPage;
+				}
+				else
+				{
+					std::string fullText;
+					for (const auto& line : book.lines)
+					{
+						if (!fullText.empty()) fullText += "\n";
+						fullText += line;
+					}
+					float bookW = ds.x * 0.6f;
+					float pageW = bookW * 0.5f - margin * 1.5f;
+					auto wrapped = WrapText(fullText, pageW, font, fontSize);
+					totalPages = (int)wrapped.size() / linesPerPage + 1;
+				}
+				
 				int randomPage = rand() % totalPages;
 				OpenBook(bookName);
 				s_currentPage = randomPage;
@@ -1042,6 +1057,14 @@ namespace CustomBooks
 		if (rightPage < totalWrappedPages)
 			drawPage(rightPage, rightX, by + margin, pageW, rightRipped);
 
+		{
+			const float pulse = 0.5f + 0.5f * std::sin((float)ImGui::GetTime() * 4.0f);
+			if (leftRipped)
+				DrawRippedPageGlow(dl, { leftX, by + margin }, { leftX + pageW, by + bookH - margin }, pulse);
+			if (rightRipped && rightPage < totalWrappedPages)
+				DrawRippedPageGlow(dl, { rightX, by + margin }, { rightX + pageW, by + bookH - margin }, pulse);
+		}
+
 		if (s_cbSelectedPage >= 0)
 		{
 			const float pulse = 0.5f + 0.5f * std::sin((float)ImGui::GetTime() * 4.0f);
@@ -1159,7 +1182,14 @@ namespace CustomBooks
 
 		if (s_cbSelectedPage < 0)
 		{
-			if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+			if (ImGui::IsKeyPressed(ImGuiKey_Enter, false))
+			{
+				if (!leftRipped)
+					s_cbSelectedPage = leftPage;
+				else if (!rightRipped)
+					s_cbSelectedPage = rightPage;
+			}
+			else if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
 			{
 				ImVec2 mp = io.MousePos;
 				bool clickLeft = mp.x >= leftX && mp.x <= leftX + pageW && mp.y >= by + margin && mp.y <= by + bookH - margin;
@@ -1567,6 +1597,7 @@ namespace CustomBooks
 				}
 
 				CloseIndex();
+				OpenBook(s_currentBook);
 			}
 		}
 	}
@@ -1709,6 +1740,15 @@ namespace CustomBooks
 	}
 
 	static void DrawPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float pulse)
+	{
+		const int alpha = (int)(130.f + 60.f * pulse);
+		const ImU32 glow = IM_COL32(0, 180, 255, std::clamp(alpha, 0, 255));
+		dl->AddRect({ mn.x - 3.f, mn.y - 3.f }, { mx.x + 3.f, mx.y + 3.f }, glow, 4.f, 0, 3.f);
+		dl->AddRect({ mn.x - 7.f, mn.y - 7.f }, { mx.x + 7.f, mx.y + 7.f },
+		            IM_COL32(0, 180, 255, (int)((130.f + 60.f * pulse) * 0.4f)), 5.f, 0, 1.5f);
+	}
+
+	static void DrawRippedPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float pulse)
 	{
 		const int alpha1 = (int)(180.f + 75.f * pulse);
 		const int alpha2 = (int)(140.f + 60.f * pulse);

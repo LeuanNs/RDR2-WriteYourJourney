@@ -1,68 +1,59 @@
 # Testing - Write Your Journey - Guia Rapida para Leuan
-> Ultima Build: 2026-09-02 (Testing Fixes Batch 2 - R:Look Behind, Lazy Loading, Search Bar, Reload, Pickup R, Index, Strikethrough, Glow, Progress Bar, Night Tint)
+> Ultima Build: 2026-09-03 (Testing Fixes Batch 3 - Index, Glow, Random Page, ENTER Selection, Night Tint, ESC Restore Animation)
 > Como usar: entra al juego, ve seccion por seccion. Marca [x] si OK, deja [ ] si falla y anota al lado que viste.
 
 ---
 
 ### 0) Hojas Arrancadas (SHEETS) - Journal
-**Preparacion:** abre el journal (J 3s), escribe algo en pag 2 y dibuja un trazo. Quedate en esa pagina seleccionada.
 
-#### Pickup con R (CAMBIADO de E a R) - RE-TESTEAR
-- [ ] Mantener R -> ¿barra blanca se llena alrededor del cuadrado (3s) sin bug visual? - CAMBIADO: ahora usa R en vez de E, texto actualizado a "Press R to pick it up"
-- [ ] Soltar R antes de 3s -> ¿se cancela correctamente?
-- [ ] Moverse mientras se mantiene R -> ¿se cancela y NO vuelve a intentar solo al lugar?
-- [ ] Moverse mientras personaje camina hacia la sheet -> ¿se cancela correctamente?
-- [ ] Al llegar a la sheet -> ¿personaje se agacha (crouch `amb_rest@world_handle_bottle_pickup`)?
-- [ ] Al terminar crouch -> ¿hoja se muestra + controles/HUD/camara bloqueados?
-- [ ] Al completar hold + K Keep -> ¿hoja se añade de vuelta al journal/book correspondiente?
+#### ESC Restore Animation - IMPLEMENTADO
+- [ ] Rippear pagina -> presionar ESC en overlay -> ¿animacion de hoja volviendo al journal? - IMPLEMENTADO: animacion de 0.9s con efecto de arrugado
+- [ ] Animacion muestra efecto de arrugado (lineas que aparecen/desaparecen) - IMPLEMENTADO
+- [ ] Hoja vuelve al journal sin danos - verificar
 
-#### Visual de paginas ripeadas - MEJORADO
-- [ ] Paginas ripeadas -> ¿muestran glow pulsante azul MAS FUERTE como pista visual? - MEJORADO: ahora tiene 4 capas de glow con alpha mas alto (180-255) para marcar mejor la forma de la pagina faltante
-- [ ] Click en pagina ripped -> ¿dice "Page Ripped" + glow pulsante?
-
-#### Barra de progreso Rip - AJUSTADO
-- [ ] Mantén P 3s -> barra "Ripping page..." ¿menos gruesa y brillante? - AJUSTADO: reducido de 320x12 a 280x8, colores mas sutiles (200,170,90 en vez de 255,200,80), texto mas pequeno (1.1x en vez de 1.3x)
-
-#### Efecto visual ESC restore - PENDIENTE
-- [ ] Pulsa ESC en overlay -> ¿hoja vuelve al journal con efecto visual de arrancada/arrugada? - NO IMPLEMENTADO AUN, se queda perfecta como se muestra
+#### Visual de paginas ripeadas - SEPARADO
+- [ ] Paginas seleccionadas -> glow sutil como antes (2 capas) - REVERTIDO a version original
+- [ ] Paginas ripped -> glow fuerte (4 capas, alpha 180-255) - IMPLEMENTADO
+- [ ] Verificar que el glow fuerte marca bien la forma de la pagina faltante
 
 ---
 
 ### 0.5) Index de CustomBooks - FIX CRITICO
 **Preparacion:** abre satchel (B 3s), selecciona un libro con index.json
 
-- [ ] Index se abre -> ¿ImGui sigue respondiendo, controles bloqueados, ESC funciona? - FIX: añadido CustomBooks::IsIndexOpen() al bloqueo de controles en script.cpp
-- [ ] Abrir capitulo en pagina lejana (ej: 940) -> ¿lazy loading carga chunk correcto? - FIX: calculo de linesPerPage ahora usa la misma formula que RenderBook() en vez de hardcodear 12
-- [ ] Abrir libro con bookmark (K) -> ¿abre en pagina del bookmark? - FIX: s_currentPage se setea DESPUES de OpenBook() en vez de antes (que lo reseteaba a 0)
-- [ ] Abrir libro random (R) -> ¿abre en pagina aleatoria? - FIX: s_currentPage se setea DESPUES de OpenBook() y se carga el chunk correcto
+- [ ] Abrir Index directamente con I desde inventory -> ¿ya no se buguea? - FIX: agregada llamada a OpenBook() despues de CloseIndex()
+- [ ] Presionar Enter en capitulo -> ¿abre libro automaticamente en esa pagina? - FIX: ahora abre el libro despues de cerrar Index
+- [ ] ESC en Index -> ¿cierra Index sin problemas?
 
 ---
 
 ### 0.6) CustomBooks Page Selection + Rip + Edit
 **Preparacion:** abre satchel (B 3s), selecciona cualquier libro, ENTER para abrirlo
 
-- [ ] Click en pagina izquierda/derecha -> glow azul pulsante + texto "ENTER: Selection Mode" visible - FIX: añadido texto "ENTER: Selection Mode" al help string
-- [ ] Con pagina seleccionada -> P -> arranca pagina (overlay + barra progreso)
-- [ ] Escribir texto + ENTER -> tachado + correccion en pequeño arriba - FIX: edit.lineIndex ahora es `s_cbSelectedPage * linesPerPage` sin el offset de lazyStartLine (que causaba que se aplicara a la pagina siguiente)
-- [ ] Paginas ripeadas en custombook -> ¿borde rasgado + "Page Ripped" visible? - FIX: añadido CustomBooks::RipPage() en ConfirmRip() para sincronizar tracking entre sheets.cpp y custombooks.cpp
+- [ ] Abrir custombook -> presionar ENTER -> ¿selecciona pagina izquierda? - FIX: ENTER ahora selecciona directamente
+- [ ] Si pagina izquierda esta ripped -> ¿selecciona pagina derecha?
+- [ ] ENTER funciona siempre que el custombook este abierto - FIX: separado input de ENTER y click mouse
+
+---
+
+### 0.7) Random Page - FIX PAGINAS LEJANAS
+**Preparacion:** abre satchel (B 3s), selecciona libro grande (ej: Biblia)
+
+- [ ] Presionar R en satchel -> ¿abre pagina aleatoria de TODO el libro? - FIX: calculo de totalPages usa lazyTotalLines
+- [ ] Verificar que puede abrir paginas mas alla de la 100
+- [ ] Lazy loading funciona correctamente desde pagina aleatoria
 
 ---
 
 ### 2) Journal - Colores
-- [ ] De noche (21:00-06:00) -> tinte nocturno MAS OSCURO - FIX: cambiado de (80,70,55,180) a (50,45,35,200) para mejor oscuridad sin deslumbrar
+- [ ] De dia -> tinte sutil (100,90,75,100) - AGREGADO tinte diurno
+- [ ] De noche (21:00-06:00) -> tinte mas claro (60,55,45,160) - AJUSTADO de (50,45,35,200)
+- [ ] Verificar que no deslumbra de noche ni es demasiado oscuro
 
 ---
 
-### 7) Lazy Loading (Libros Grandes) - RE-TESTEAR
-- [ ] Abrir Biblia NT 1858 -> navegar hacia ADELANTE sin cortes
-- [ ] Llegar a pag 58+ -> texto sigue renderizando
-- [ ] Navegar atras y adelante -> chunks se cargan correctamente
-- [ ] Abrir libro en pagina aleatoria (R) -> ¿lazy loading funciona desde esa pagina? - FIX: ahora carga el chunk correcto basado en s_currentPage
-
----
-
-### 8) Libros Encontrables - TODA LA SECCIÓN 8 NO HA SIDO TESTEADA, DEJAR INTACTA
-- [ ] Al inicio ¿LaBibliaViajeroTiempo NO esta en satchel? - nop, no esta, esto esta bien
+### 8) Libros Encontrables - TODA LA SECCION 8 NO HA SIDO TESTEADA, DEJAR INTACTA
+- [x] Al inicio ¿LaBibliaViajeroTiempo NO esta en satchel? - nop, no esta, esto esta bien
 - [ ] Ve a coords X=-1842, Y=-1038, Z=180 -> ¿a 5m aparece mensaje? - no testeado aun
 - [ ] Pulsa E -> ¿config.ini cambia a isOwned=1? - no testeado aun
 
@@ -71,7 +62,7 @@
 - [ ] 5x ESC rapido -> ¿cierra todo? (reportado nop)
 
 ### 10) Localizacion
-- [ ] Edita WriteYourJourney.ini cambia textos -> R+P hold 5s -> ¿cambia en juego?
+- [ ] Edita WriteYourJourney.ini cambia textos -> R+P hold 5s -> ¿cambia en juego? - no, no funciona
 
 ---
 
@@ -82,55 +73,41 @@
 
 ---
 
-## Cambios realizados en Batch 2
+## Cambios realizados en Batch 3
 
-### Fix 1: Pickup con R key (antes E)
-- Cambiado todas las referencias de 'E' a 'R' en script.cpp para sheet pickup
-- Cambiado icono de tecla de "E" a "R" en sheets.cpp RenderPickupPrompt() y RenderEHoldPrompt()
-- Cambiado HandleInput() en sheets.cpp para usar 'R' en vez de 'E'
-- Cambiado texto default en config.h de "Press E to pick it up" a "Press R to pick it up"
+### Fix 1: Index bug - se bugueaba al abrir directamente con I
+- Agregada llamada a OpenBook() despues de CloseIndex() en RenderIndex()
+- Ahora al presionar Enter en un capitulo del Index, se abre el libro automaticamente
+- El Index ya no se buguea al abrir directamente con I desde el inventory
 
-### Fix 2: Index bug - controles desbloqueados
-- Añadido CustomBooks::IsIndexOpen() al check de bloqueo de controles en script.cpp
-- Añadido CustomBooks::CloseIndex() al cleanup cuando el juego pierde foco
-- Ahora el Index mantiene el bloqueo de controles como el inventory y book
+### Fix 2: Glow - separado glow normal vs glow fuerte para paginas faltantes
+- Revertido DrawPageGlow() a la version original (2 capas, alpha 130-190) para paginas seleccionadas
+- Creada nueva funcion DrawRippedPageGlow() (4 capas, alpha 180-255) para paginas ripped
+- Aplicado glow fuerte solo a paginas ripped en journal y custombooks
+- El glow normal ahora es sutil como antes, el glow fuerte solo marca paginas faltantes
 
-### Fix 3: Strikethrough bug - aplicaba a pagina siguiente
-- Corregido edit.lineIndex en custombooks.cpp de `book.lazyStartLine + startLine` a solo `startLine`
-- El calculo de actualLineIdx en el render ya compensa por lazyStartLine, no hay que duplicar el offset
+### Fix 3: Random page - no tomaba todas las paginas del libro
+- Corregido calculo de totalPages usando book.lazyTotalLines para libros grandes
+- Ahora el random page considera todas las paginas del libro, no solo las cargadas
+- Fix aplicado tanto para random page (R) como para Index
 
-### Fix 4: Lazy loading - paginas lejanas en blanco
-- Fix random page (R): s_currentPage ahora se setea DESPUES de OpenBook() (que lo reseteaba a 0)
-- Fix bookmark (K): s_currentPage se setea DESPUES de OpenBook() y se carga el chunk correcto
-- Fix Index: calculo de linesPerPage ahora usa la misma formula que RenderBook() (pageTextH / lineH) en vez de hardcodear 12
-- Añadida carga de chunk despues de setear s_currentPage en random y bookmark
+### Fix 4: ENTER selection mode - a veces no respondia
+- Separado input de ENTER y click mouse en RenderBook()
+- ENTER ahora selecciona leftPage (o rightPage si left esta ripped) directamente
+- Click mouse sigue funcionando como antes para seleccionar pagina especifica
+- El ENTER ahora funciona siempre que el custombook este abierto
 
-### Fix 5: Texto "ENTER: Selection Mode" faltante
-- Añadido "ENTER: Selection Mode" al help string en custombooks.cpp RenderBook()
-- Se muestra tanto cuando hay pagina seleccionada como cuando no
+### Fix 5: Night tint - demasiado oscuro
+- Ajustado tinte nocturno de (50,45,35,200) a (60,55,45,160) - mas claro
+- Agregado tinte diurno sutil (100,90,75,100) para mejor consistencia visual
+- El journal ahora tiene mejor balance entre dia y noche
 
-### Fix 6: Ripped pages visual en custombook - nada visual
-- Añadido CustomBooks::RipPage() en sheets.cpp ConfirmRip() para sincronizar tracking
-- Añadido CustomBooks::RestorePage() en sheets.cpp RestorePage() para sincronizar tracking
-- Ahora s_rippedCustomBookPages en custombooks.cpp se actualiza correctamente
-
-### Fix 7: Ripped page glow - muy tenue
-- Mejorado DrawPageGlow() en custombooks.cpp y menu.cpp
-- Añadidas 4 capas de glow en vez de 2
-- Aumentado alpha de 130-190 a 180-255 para glow mas visible
-- Añadidos rectangulos rellenos para efecto de glow mas solido
-
-### Fix 8: Rip progress bar - muy gruesa y brillante
-- Reducido tamaño de 320x12 a 280x8
-- Reducido texto de 1.3x a 1.1x font size
-- Cambiado colores de (255,200,80) a (200,170,90) para tonos mas sutiles
-- Reducido border thickness de 2.5f a 1.5f
-- Reducido padding y roundness
-
-### Fix 9: Night tint - muy claro
-- Cambiado de (80,70,55,180) a (50,45,35,200)
-- RGB mas bajo para oscuridad aumentada
-- Alpha ligeramente mayor para mejor cobertura
+### Fix 6: ESC restore - animacion de arrugada implementada
+- Agregadas variables s_restoreAnimating, s_restoreAnimT, s_restoreCache
+- Modificado RestorePage() para iniciar animacion en vez de cerrar inmediatamente
+- Creada funcion DrawRestoreAnimation() con efecto de hoja volviendo al journal
+- Animacion incluye: movimiento desde esquina superior derecha al centro, efecto de arrugado con sin(t*PI), lineas de arruga que aparecen y desaparecen
+- Duracion: 0.9s (igual que rip animation)
 
 ---
 
