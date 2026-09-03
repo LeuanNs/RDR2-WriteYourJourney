@@ -1155,12 +1155,6 @@ namespace
 			{
 				ImGui::TextUnformatted(pb.text);
 			}
-			else
-			{
-				ImGui::PushStyleColor(ImGuiCol_Text, FadeCol(COL_INK_FADED, A));
-				ImGui::TextUnformatted(WJConfig::Empty_Page.c_str());
-				ImGui::PopStyleColor();
-			}
 
 			ImGui::PopTextWrapPos();
 			ImGui::PopFont();
@@ -1964,6 +1958,9 @@ void CImGuiMenu::Render()
 
 	CustomBooks::RenderPickupPrompt();
 
+	if (Sheets::IsEHoldActive())
+		Sheets::RenderEHoldPrompt();
+
 	bool worldSheetOverlay = Sheets::IsShowingOverlay() && Sheets::IsViewingDiscoverable() && !GetIsOpen();
 	if (worldSheetOverlay)
 	{
@@ -2069,7 +2066,9 @@ void CImGuiMenu::Render()
 	{
 		const BookGeom g = ComputeBookGeom(ds);
 
-		if (s_selectedPage == 0)
+		bool overlayShowing = Sheets::IsShowingOverlay() || Sheets::IsAnimating();
+
+		if (s_selectedPage == 0 && !overlayShowing)
 		{
 			int leftPage = s_pagePair;
 			int rightPage = Sheets::GetNextVisiblePage(s_pagePair + 1);
@@ -2077,11 +2076,21 @@ void CImGuiMenu::Render()
 				rightPage = Sheets::GetNextVisiblePage(leftPage + 1);
 			if (!Sheets::IsPageRipped(leftPage, true))
 				DrawPagePreview(g, leftPage, s_fadeIn);
+			else
+			{
+				const float pulse = 0.5f + 0.5f * std::sin((float)ImGui::GetTime() * 3.0f);
+				DrawPageGlow(dl, g.leftMin, g.leftMax, s_fadeIn * 0.5f, pulse);
+			}
 			if (!Sheets::IsPageRipped(rightPage, true))
 				DrawPagePreview(g, rightPage, s_fadeIn);
+			else
+			{
+				const float pulse = 0.5f + 0.5f * std::sin((float)ImGui::GetTime() * 3.0f);
+				DrawPageGlow(dl, g.rightMin, g.rightMax, s_fadeIn * 0.5f, pulse);
+			}
 			DrawPageOverviewGlow(dl, g, s_fadeIn);
 		}
-		else if (!s_zoomed && s_zoomT <= 0.01f)
+		else if (!s_zoomed && s_zoomT <= 0.01f && !overlayShowing)
 		{
 			int companionPage = IsPageOnRight(s_selectedPage) ? s_selectedPage - 1 : s_selectedPage + 1;
 			if (Sheets::IsPageRipped(companionPage, true))
@@ -2094,7 +2103,7 @@ void CImGuiMenu::Render()
 				ImFont* f = GetJournalFont();
 				const ImVec2 pmin = PageMin(g, s_selectedPage);
 				const ImVec2 pmax = PageMax(g, s_selectedPage);
-				const char* msg = "(Page ripped)";
+				const char* msg = WJConfig::Sheet_PageRipped.c_str();
 				ImVec2 msz = f->CalcTextSizeA(f->FontSize * 1.2f, FLT_MAX, 0.f, msg);
 				dl->AddText(f, f->FontSize * 1.2f, { (pmin.x + pmax.x) * 0.5f - msz.x * 0.5f, (pmin.y + pmax.y) * 0.5f - msz.y * 0.5f }, FadeCol(COL_INK_FADED, s_fadeIn), msg);
 			}
@@ -2161,7 +2170,7 @@ void CImGuiMenu::Render()
 			ImFont* bf = GetJournalFont();
 			const BookGeom gAnim = ComputeBookGeom(ds);
 			ImVec2 msgSz = bf->CalcTextSizeA(bf->FontSize * 1.4f, FLT_MAX, 0.f, bmMsg);
-			dl->AddText(bf, bf->FontSize * 1.4f, { ds.x * 0.5f - msgSz.x * 0.5f, gAnim.spreadMin.y - bf->FontSize * 3.f + 5.f },
+			dl->AddText(bf, bf->FontSize * 1.4f, { ds.x * 0.5f - msgSz.x * 0.5f, gAnim.spreadMin.y - bf->FontSize * 3.f + 11.f },
 				FadeCol(IM_COL32(234, 223, 197, 255), s_fadeIn * textAlpha), bmMsg);
 		}
 	}

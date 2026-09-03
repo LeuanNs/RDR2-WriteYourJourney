@@ -56,6 +56,9 @@ namespace WJConfig
 	inline constexpr const char* FB_Sheet_Nearby       = "There is a ripped page nearby";
 	inline constexpr const char* FB_Sheet_PressE       = "Press E to pick it up";
 	inline constexpr const char* FB_Sheet_RippedChapter = "Ripped Sheet";
+	inline constexpr const char* FB_Sheet_PageRipped = "Page Ripped";
+	inline constexpr const char* FB_Sheet_KeepSheet = "K: Keep the Sheet";
+	inline constexpr const char* FB_Sheet_LookBehind = "R: Look Behind";
 
 	inline std::string Help_Cover;
 	inline std::string Help_Overview;
@@ -91,6 +94,9 @@ namespace WJConfig
 	inline std::string Sheet_Nearby;
 	inline std::string Sheet_PressE;
 	inline std::string Sheet_RippedChapter;
+	inline std::string Sheet_PageRipped;
+	inline std::string Sheet_KeepSheet;
+	inline std::string Sheet_LookBehind;
 
 	inline std::string GetModuleDir()
 	{
@@ -216,6 +222,9 @@ namespace WJConfig
 		loadStr("Sheet_Nearby",        FB_Sheet_Nearby,        Sheet_Nearby);
 		loadStr("Sheet_PressE",        FB_Sheet_PressE,        Sheet_PressE);
 		loadStr("Sheet_RippedChapter", FB_Sheet_RippedChapter, Sheet_RippedChapter);
+		loadStr("Sheet_PageRipped", FB_Sheet_PageRipped, Sheet_PageRipped);
+		loadStr("Sheet_KeepSheet", FB_Sheet_KeepSheet, Sheet_KeepSheet);
+		loadStr("Sheet_LookBehind", FB_Sheet_LookBehind, Sheet_LookBehind);
 
 		BlessingValid = ValidateBlessing();
 	}

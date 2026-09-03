@@ -25,19 +25,28 @@ struct RippedSheetCache
 	bool fromJournal = true;
 	std::string bookName;
 	int chapter = 1;
+	std::string backText;
+	SheetDrawing backDrawing;
+	int backPage = 0;
 };
 
 struct DiscoverableSheet
 {
 	int id = 0;
 	float x = 0.f, y = 0.f, z = 0.f;
-	float radius = 10.f;
+	float radius = 5.f;
 	std::string pickupMessage;
 	std::string text;
 	SheetDrawing drawing;
 	std::string author;
 	std::string source;
 	bool collected = false;
+	int originalPage = 0;
+	bool fromJournal = true;
+	std::string bookName;
+	int chapter = 1;
+	std::string backText;
+	SheetDrawing backDrawing;
 };
 
 namespace Sheets
@@ -50,6 +59,7 @@ namespace Sheets
 	void HandleInput();
 	void Render();
 	void RenderPickupPrompt();
+	void RenderEHoldPrompt();
 
 	void UpdatePickupPrompt(float px, float py, float pz);
 	bool TryPickupSheet();
@@ -61,6 +71,7 @@ namespace Sheets
 
 	bool IsPageRipped(int page, bool isJournal, const std::string& bookName = "");
 	int GetNextVisiblePage(int startPage);
+	int GetPartnerPage(int page);
 
 	void StartRipPage(const std::string& text, const SheetDrawing& drawing, int page, bool fromJournal, const std::string& bookName = "", int chapter = 1);
 	void ConfirmRip();
@@ -83,4 +94,29 @@ namespace Sheets
 	bool GetRipFromJournal();
 	bool IsViewingDiscoverable();
 	const std::string& GetRipBookName();
+
+	float GetEHoldProgress();
+	bool IsEHoldActive();
+	void StartEHold();
+	void CancelEHold();
+	bool IsEHoldComplete();
+
+	bool IsCrouching();
+	void StartCrouch();
+	bool UpdateCrouch();
+
+	bool IsFlipAnimating();
+	float GetFlipAnimT();
+	void StartFlipAnim();
+	bool IsShowingBack();
+	void ToggleBackSide();
+
+	void KeepSheet();
+	bool IsSheetKept();
+
+	void MarkSheetCollected(int sheetId);
+	bool IsSheetCollected(int sheetId);
+
+	bool WasSheetViewed();
+	void SetSheetViewed(bool v);
 }

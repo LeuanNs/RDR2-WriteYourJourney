@@ -419,9 +419,21 @@ void main()
 			const Ped ped = PlayerPed();
 			const Vector3 pos = ENTITY::GET_ENTITY_COORDS(ped, TRUE, TRUE);
 			Sheets::SetPlayerCoords(pos.x, pos.y, pos.z);
+
+			float dxInput = PAD::GET_CONTROL_NORMAL(0, 1) - PAD::GET_CONTROL_NORMAL(0, 0);
+			float dyInput = PAD::GET_CONTROL_NORMAL(0, 3) - PAD::GET_CONTROL_NORMAL(0, 2);
+			if (dxInput < -0.1f || dxInput > 0.1f || dyInput < -0.1f || dyInput > 0.1f)
+			{
+				Sheets::CancelWalk();
+				TASK::CLEAR_PED_TASKS(ped, TRUE, FALSE);
+				WAIT(0);
+				continue;
+			}
+
 			if (Sheets::UpdateWalk(pos.x, pos.y, pos.z))
 			{
 				TASK::CLEAR_PED_TASKS(ped, TRUE, FALSE);
+				Sheets::StartCrouch();
 				if (STREAMING::HAS_ANIM_DICT_LOADED("amb_rest@world_human_bottle_pickup@male_a@base") == FALSE)
 				{
 					STREAMING::REQUEST_ANIM_DICT("amb_rest@world_human_bottle_pickup@male_a@base");
@@ -430,10 +442,30 @@ void main()
 						WAIT(0);
 				}
 				if (STREAMING::HAS_ANIM_DICT_LOADED("amb_rest@world_human_bottle_pickup@male_a@base"))
-					TASK::TASK_PLAY_ANIM(ped, "amb_rest@world_human_bottle_pickup@male_a@base", "base", 2.0f, -2.0f, 1200, AF_HOLD_LAST_FRAME, 0.0f, FALSE, 0, FALSE, nullptr, FALSE);
-				WAIT(900);
+					TASK::TASK_PLAY_ANIM(ped, "amb_rest@world_human_bottle_pickup@male_a@base", "base", 2.0f, -2.0f, 1500, AF_HOLD_LAST_FRAME, 0.0f, FALSE, 0, FALSE, nullptr, FALSE);
+
+				while (!Sheets::UpdateCrouch())
+				{
+					LockControlsThisFrame();
+					WAIT(0);
+				}
+
 				TASK::CLEAR_PED_TASKS(ped, TRUE, FALSE);
 				Sheets::TryPickupSheet();
+
+				if (Sheets::IsShowingOverlay())
+				{
+					while (Sheets::IsShowingOverlay())
+					{
+						LockControlsThisFrame();
+						if (!GameHasFocus())
+						{
+							Sheets::DismissOverlay();
+							break;
+						}
+						WAIT(0);
+					}
+				}
 			}
 			else
 			{
@@ -456,12 +488,37 @@ void main()
 				CustomBooks::TryPickupBook(pos.x, pos.y, pos.z);
 			}
 
-			if (Sheets::IsNearPickup() && (SafeGetAsyncKeyState('E') & 0x0001) != 0)
+			if (Sheets::IsNearPickup())
 			{
-				float sx, sy, sz;
-				Sheets::GetNearbySheetCoords(sx, sy, sz);
-				Sheets::StartWalkToSheet();
-				TASK::TASK_GO_STRAIGHT_TO_COORD(ped, sx, sy, sz, 1.0f, -1, 0.0f, 0.5f, 0);
+				bool eDown = (SafeGetAsyncKeyState('E') & 0x8000) != 0;
+				bool eJustPressed = (SafeGetAsyncKeyState('E') & 0x0001) != 0;
+
+				if (eJustPressed && !Sheets::IsEHoldActive())
+				{
+					Sheets::StartEHold();
+				}
+
+				if (Sheets::IsEHoldActive())
+				{
+					if (!eDown)
+					{
+						Sheets::CancelEHold();
+					}
+					else
+					{
+						Sheets::UpdatePickupPrompt(pos.x, pos.y, pos.z);
+						if (!Sheets::IsNearPickup())
+							Sheets::CancelEHold();
+					}
+				}
+
+				if (Sheets::IsEHoldComplete())
+				{
+					Sheets::StartWalkToSheet();
+					float sx, sy, sz;
+					Sheets::GetNearbySheetCoords(sx, sy, sz);
+					TASK::TASK_GO_STRAIGHT_TO_COORD(ped, sx, sy, sz, 1.0f, -1, 0.0f, 0.5f, 0);
+				}
 			}
 		}
 		else if (s_active && PlayerCanUseJournal())
