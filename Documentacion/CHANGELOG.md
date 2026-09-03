@@ -1,5 +1,159 @@
 # Changelog - Write Your Journey
 
+## [Build - Batch 8: Physical Page Model + Visual Overhaul + Cumulative Damage] - 2026-09-03
+
+### Correccion modelo fisico de hoja (partner para custombooks)
+
+**Problema:** CustomBooks usa paginas 0-indexed (0, 1, 2, 3...) pero `GetPartnerPage()` estaba disenado para paginas 1-indexed del journal. Esto causaba que rippear pagina 0 de un custombook no marcara partner, y rippear pagina 1 marcara pagina 0 (incorrecto).
+
+**Solucion:** Ajustadas todas las llamadas a `GetPartnerPage` en custombooks.cpp y sheets.cpp para convertir pagina 0-indexed a 1-indexed antes de llamar y convertir de vuelta:
+- Custombook page N → GetPartnerPage(N+1) - 1
+- Journal page N → GetPartnerPage(N) (sin cambio)
+
+**Pares fisicos validados:**
+- Pagina 1 (journal): sin partner (especial)
+- 2<->3, 4<->5, 6<->7... 26<->27
+- Custombook: 0 sin partner, 1<->2, 3<->4, 5<->6...
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/custombooks.cpp` - RipPage, RestorePage, P key handler con conversion
+- `src/ImGuiRDR2Hook/sheets.cpp` - StartRipPage, ConfirmRip, RestorePage, KeepSheet, TryPickupSheet con fromJournal check
+
+### Fix bug custombook tras rip+L
+
+**Problema:** Tras rippear pagina en custombook y presionar L (LeaveSheetAtPlayer), el RenderBook mostraba ambas paginas del par como ripped/bloqueado porque `s_cbSelectedPage` seguia apuntando a pagina ripped.
+
+**Solucion:** Agregado check al inicio de `RenderBook()` que deselecciona `s_cbSelectedPage` si la pagina esta ripped (similar al check existente en menu.cpp para el journal).
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/custombooks.cpp` - Check de deseleccion en RenderBook()
+
+### Glow rojo + relleno gris con lineas diagonales y signos ?
+
+**Cambio visual completo de paginas ripped no recogidas:**
+
+1. **DrawRippedPageGlow**: Cambiado de azul (0,150/180/200/220,255) a rojo (255,50/80/100/120,120)
+2. **DrawRippedPageSlot**: 
+   - Fondo: gris oscuro (80,75,70,200) en vez de pergamino (160,145,115,140)
+   - Bordes rasgados: gris (100,95,88,220) en vez de pergamino claro
+   - Lineas diagonales gruesas (2.5px) gris sutil (120,115,108,80) con espaciado 25px
+   - Multiples signos "?" gris transparente (140,135,125,100) esparcidos con jitter
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/menu.cpp` - DrawRippedPageGlow, DrawRippedPageSlot
+- `src/ImGuiRDR2Hook/custombooks.cpp` - DrawRippedPageGlow, DrawRippedPageSlot
+
+### Fix barrita ripping en custombook
+
+**Problema:** La barra "Ripping page..." en custombook aparecia detras del ImGui porque usaba `GetBackgroundDrawList()`.
+
+**Solucion:** Cambiado a `GetForegroundDrawList()` en `DrawRipProgressBar()` para que siempre se dibuje al frente.
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/sheets.cpp` - DrawRipProgressBar usa GetForegroundDrawList()
+
+### Efecto restaurado aclarado
+
+**Cambio:** Color de DrawRestoredPage aclarado de (175,165,140) a (192,183,160).
+- Mas oscuro que pagina original (210,200,175) pero menos que (175,165,140)
+- Mantiene el visual de pagina daniada sin ser tan oscuro
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/menu.cpp` - DrawRestoredPage
+- `src/ImGuiRDR2Hook/custombooks.cpp` - DrawRestoredPage
+
+### Sistema de dano acumulativo
+
+**Nuevo sistema:** Cada ciclo rip -> Keep/ESC restore incrementa un contador de dano por pagina.
+
+**Formato damaged_pages.ini actualizado:**
+```ini
+[Journal]
+Page=5,2
+Page=10,3
+
+[Custom:BookName]
+Page=3,1
+```
+Donde el segundo numero es el contador de dano (1-5).
+
+**Comportamiento:**
+- Contador 1: dano minimo (arrugas sutiles, manchas tenues)
+- Contador 5: dano maximo (70% ilegible, texto bajo quiebres no legible)
+- Intensidad progresiva: alpha de arrugas/manchas/tajos escala con el contador
+- Color de fondo se oscurece progresivamente (192→160, 183→150, 160→130)
+- Contador se guarda y carga desde damaged_pages.ini
+- Max 5 ciclos, luego estancado permanente
+
+**Nuevas funciones:**
+- `Sheets::GetPageDamageCount(page, isJournal, bookName)` - retorna contador actual
+- `Sheets::IncrementPageDamage(page, isJournal, bookName)` - incrementa contador (max 5)
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/sheets.h` - Nuevas declaraciones
+- `src/ImGuiRDR2Hook/sheets.cpp` - Nuevas funciones, SaveDamagedPagesIndex/LoadDamagedPagesIndex con formato Page=N,count, IncrementPageDamage en RestorePage/KeepSheet
+- `src/ImGuiRDR2Hook/menu.cpp` - DrawRestoredPage/DrawRestoredPageDamageOverlay con damageCount, intensidad progresiva
+- `src/ImGuiRDR2Hook/custombooks.cpp` - DrawRestoredPage/DrawRestoredPageDamageOverlay con damageCount, intensidad progresiva
+
+### Tinte nocturno ajustado
+
+**Cambio:** Tinte nocturno ahora es exactamente igual al diurno pero 15% menos brillante.
+- Dia: (100, 90, 75, 100)
+- Noche: (85, 77, 64, 100) = dia * 0.85
+- Alpha igual (100), solo RGB reducido
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/menu.cpp` - PageAmbientTint
+
+### Build output
+- `WriteYourJourney.asi` compilado exitosamente en `C:\Users\evanm\Desktop\`
+- 0 errores, 2 advertencias pre-existentes (sscanf, void main)
+
+### Checklist de Testing
+
+#### Modelo fisico de hoja
+- [ ] Journal: rippear 26 → marca 26 y 27 en ripped_pages.ini
+- [ ] Vista 25-26: 25 normal + 26 ripped
+- [ ] Vista 27-28: 27 ripped + 28 normal
+- [ ] Custombook: rippear pagina 1 → marca 1 y 2 (partner correcto para 0-indexed)
+- [ ] Custombook: pagina 0 no tiene partner (especial)
+
+#### Fix custombook tras rip+L
+- [ ] Custombook: rippear pagina → presionar L → overlay desaparece
+- [ ] Volver a abrir custombook → NO muestra ambas paginas como ripped/bloqueado
+- [ ] s_cbSelectedPage se deselecciona automaticamente si apunta a pagina ripped
+
+#### Glow rojo + relleno gris
+- [ ] Pagina ripped en journal → glow ROJO pulsante (no azul)
+- [ ] Slot de pagina ripped → fondo GRIS oscuro (no pergamino)
+- [ ] Lineas diagonales gruesas sutiles visibles dentro del slot
+- [ ] Signos "?" gris transparente esparcidos dentro del slot
+- [ ] Mismo visual en custombook
+
+#### Barrita ripping custombook
+- [ ] Custombook: mantener P 3s → barra "Ripping page..." aparece AL FRENTE de todo
+- [ ] Barra visible sobre el libro, no detras
+
+#### Efecto restaurado aclarado
+- [ ] Pagina restaurada → color (192,183,160) mas claro que antes (175,165,140)
+- [ ] Sigue siendo mas oscuro que pagina normal (210,200,175)
+
+#### Dano acumulativo
+- [ ] Rippear pagina → ESC restore → contador = 1 (dano minimo)
+- [ ] Volver a rippear misma pagina → ESC restore → contador = 2
+- [ ] Repetir 5 veces → contador = 5 (dano maximo, 70% ilegible)
+- [ ] Cerrar y reabrir juego → contador se mantiene (guardado en damaged_pages.ini)
+- [ ] Tras 5 ciclos, seguir rippeando → contador se estanca en 5
+- [ ] Overlay de dano mas intenso con contador alto (arrugas mas visibles, manchas mas oscuras)
+- [ ] Texto bajo quiebres no legible con contador 5
+
+#### Tinte nocturno
+- [ ] De dia (06:00-21:00): tinte (100,90,75,100)
+- [ ] De noche (21:00-06:00): tinte (85,77,64,100) - 15% menos brillante
+- [ ] Diferencia sutil pero perceptible entre dia y noche
+
+---
+
 ## [Build - Index Crash Fix] - 2026-09-03
 
 ### Fix crítico: Crash al usar Index (I + ENTER + seleccionar capítulo)

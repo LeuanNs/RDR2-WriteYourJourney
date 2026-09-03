@@ -54,8 +54,8 @@ namespace Sheets
 	static std::unordered_set<int> s_rippedJournalPages;
 	static std::unordered_map<std::string, std::unordered_set<int>> s_rippedCustomPages;
 	
-	static std::unordered_set<int> s_damagedJournalPages;
-	static std::unordered_map<std::string, std::unordered_set<int>> s_damagedCustomPages;
+	static std::unordered_map<int, int> s_damagedJournalPages;
+	static std::unordered_map<std::string, std::unordered_map<int, int>> s_damagedCustomPages;
 
 	static std::vector<DiscoverableSheet> s_discoverableSheets;
 	static int s_nearbySheetId = -1;
@@ -128,13 +128,13 @@ namespace Sheets
 		std::ofstream out(GetDamagedPagesPath());
 		if (!out) return;
 		out << "[Journal]\n";
-		for (int p : s_damagedJournalPages)
-			out << "Page=" << p << "\n";
+		for (const auto& [page, count] : s_damagedJournalPages)
+			out << "Page=" << page << "," << count << "\n";
 		for (const auto& [bookName, pages] : s_damagedCustomPages)
 		{
 			out << "\n[Custom:" << bookName << "]\n";
-			for (int p : pages)
-				out << "Page=" << p << "\n";
+			for (const auto& [page, count] : pages)
+				out << "Page=" << page << "," << count << "\n";
 		}
 	}
 
@@ -162,11 +162,24 @@ namespace Sheets
 			}
 			if (line.substr(0, 5) == "Page=")
 			{
-				int pg = std::atoi(line.substr(5).c_str());
+				std::string valStr = line.substr(5);
+				size_t comma = valStr.find(',');
+				int pg = 0, count = 1;
+				if (comma != std::string::npos)
+				{
+					pg = std::atoi(valStr.substr(0, comma).c_str());
+					count = std::atoi(valStr.substr(comma + 1).c_str());
+				}
+				else
+				{
+					pg = std::atoi(valStr.c_str());
+				}
+				if (count < 1) count = 1;
+				if (count > 5) count = 5;
 				if (inJournal)
-					s_damagedJournalPages.insert(pg);
+					s_damagedJournalPages[pg] = count;
 				else if (!currentBook.empty())
-					s_damagedCustomPages[currentBook].insert(pg);
+					s_damagedCustomPages[currentBook][pg] = count;
 			}
 		}
 	}
@@ -430,6 +443,33 @@ namespace Sheets
 		return it->second.count(page) > 0;
 	}
 
+	int GetPageDamageCount(int page, bool isJournal, const std::string& bookName)
+	{
+		if (isJournal)
+		{
+			auto it = s_damagedJournalPages.find(page);
+			return it != s_damagedJournalPages.end() ? it->second : 0;
+		}
+		auto itBook = s_damagedCustomPages.find(bookName);
+		if (itBook == s_damagedCustomPages.end()) return 0;
+		auto itPage = itBook->second.find(page);
+		return itPage != itBook->second.end() ? itPage->second : 0;
+	}
+
+	void IncrementPageDamage(int page, bool isJournal, const std::string& bookName)
+	{
+		if (isJournal)
+		{
+			int& count = s_damagedJournalPages[page];
+			if (count < 5) count++;
+		}
+		else
+		{
+			int& count = s_damagedCustomPages[bookName][page];
+			if (count < 5) count++;
+		}
+	}
+
 	int GetNextVisiblePage(int startPage)
 	{
 		for (int p = startPage; p < startPage + 20; ++p)
@@ -580,7 +620,7 @@ namespace Sheets
 		s_ripCache.chapter = chapter;
 		s_ripCache.backText = backText;
 		s_ripCache.backDrawing = backDrawing;
-		s_ripCache.backPage = GetPartnerPage(page);
+		s_ripCache.backPage = fromJournal ? GetPartnerPage(page) : GetPartnerPage(page + 1) - 1;
 		s_ripping = true;
 		s_ripProgress = 0.f;
 	}
@@ -590,7 +630,7 @@ namespace Sheets
 		if (!s_ripping && !s_ripAnimating) return;
 
 		int page = s_ripCache.sourcePage;
-		int partner = GetPartnerPage(page);
+		int partner = s_ripCache.fromJournal ? GetPartnerPage(page) : GetPartnerPage(page + 1) - 1;
 		s_ripCache.backPage = partner;
 
 		if (s_ripCache.fromJournal)
@@ -639,13 +679,13 @@ namespace Sheets
 		if (!s_showingOverlay || s_viewingDiscoverable) return;
 
 		int page = s_overlayCache.sourcePage;
-		int partner = GetPartnerPage(page);
+		int partner = s_overlayCache.fromJournal ? GetPartnerPage(page) : GetPartnerPage(page + 1) - 1;
 		if (s_overlayCache.fromJournal)
 		{
 			s_rippedJournalPages.erase(page);
 			if (partner > 0) s_rippedJournalPages.erase(partner);
-			s_damagedJournalPages.insert(page);
-			if (partner > 0) s_damagedJournalPages.insert(partner);
+			IncrementPageDamage(page, true);
+			if (partner > 0) IncrementPageDamage(partner, true);
 		}
 		else
 		{
@@ -655,8 +695,8 @@ namespace Sheets
 				it->second.erase(page);
 				if (partner > 0) it->second.erase(partner);
 			}
-			s_damagedCustomPages[s_overlayCache.bookName].insert(page);
-			if (partner > 0) s_damagedCustomPages[s_overlayCache.bookName].insert(partner);
+			IncrementPageDamage(page, false, s_overlayCache.bookName);
+			if (partner > 0) IncrementPageDamage(partner, false, s_overlayCache.bookName);
 			CustomBooks::RestorePage(s_overlayCache.bookName, page);
 		}
 
@@ -715,8 +755,8 @@ namespace Sheets
 							
 							// Mark as damaged (shows wrinkled visual permanently)
 							int partner = GetPartnerPage(sheet.originalPage);
-							s_damagedJournalPages.insert(sheet.originalPage);
-							if (partner > 0) s_damagedJournalPages.insert(partner);
+							IncrementPageDamage(sheet.originalPage, true);
+							if (partner > 0) IncrementPageDamage(partner, true);
 							
 							// Remove from ripped pages
 							s_rippedJournalPages.erase(sheet.originalPage);
@@ -760,15 +800,15 @@ namespace Sheets
 								}
 							}
 							
-							int partner = GetPartnerPage(sheet.originalPage);
-							s_damagedCustomPages[sheet.bookName].insert(sheet.originalPage);
-							if (partner > 0) s_damagedCustomPages[sheet.bookName].insert(partner);
+							int partner = GetPartnerPage(sheet.originalPage + 1) - 1;
+							IncrementPageDamage(sheet.originalPage, false, sheet.bookName);
+							if (partner >= 0) IncrementPageDamage(partner, false, sheet.bookName);
 							
 							auto it = s_rippedCustomPages.find(sheet.bookName);
 							if (it != s_rippedCustomPages.end())
 							{
 								it->second.erase(sheet.originalPage);
-								if (partner > 0) it->second.erase(partner);
+								if (partner >= 0) it->second.erase(partner);
 							}
 							
 							CustomBooks::RestorePage(sheet.bookName, sheet.originalPage);
@@ -921,7 +961,7 @@ namespace Sheets
 			s_overlayCache.chapter = sheet.chapter;
 			s_overlayCache.backText = sheet.backText;
 			s_overlayCache.backDrawing = sheet.backDrawing;
-			s_overlayCache.backPage = GetPartnerPage(sheet.originalPage);
+			s_overlayCache.backPage = sheet.fromJournal ? GetPartnerPage(sheet.originalPage) : GetPartnerPage(sheet.originalPage + 1) - 1;
 
 			s_showingOverlay = true;
 			s_viewingDiscoverable = true;
@@ -1295,7 +1335,7 @@ namespace Sheets
 		if (!s_ripping) return;
 
 		ImFont* df = ImGui::GetFont();
-		ImDrawList* dl = ImGui::GetBackgroundDrawList();
+		ImDrawList* dl = ImGui::GetForegroundDrawList();
 		float w = std::min(280.f, ds.x * 0.22f);
 		float h = 8.f;
 		ImVec2 c(ds.x * 0.5f, ds.y - df->FontSize * 5.0f);

@@ -1,10 +1,79 @@
 # Testing - Write Your Journey - Guia Rapida para Leuan
-> Ultima Build: 2026-09-03 (Testing Fixes Batch 7 - Restored Page Overlay Fix, KeepSheet Restore, Index Fix, Mouse Handling)
+> Ultima Build: 2026-09-03 (Batch 8 - Physical Page Model + Visual Overhaul + Cumulative Damage)
 > Como usar: entra al juego, ve seccion por seccion. Marca [x] si OK, deja [ ] si falla y anota al lado que viste.
 
 ---
 
 ### 0) Hojas Arrancadas (SHEETS) - Journal
+
+#### Modelo fisico de hoja - BATCH 8
+**Preparacion:** journal abierto, navegar a paginas especificas
+
+- [ ] Journal: rippear pagina 26 → verificar ripped_pages.ini tiene Page=26 y Page=27
+- [ ] Vista 25-26: pagina 25 normal + pagina 26 ripped (slot gris con ?)
+- [ ] Vista 27-28: pagina 27 ripped (slot gris con ?) + pagina 28 normal
+- [ ] Paginas visibles tras rippear 26: solo 25 y 28 (26 y 27 faltan)
+- [ ] Custombook: rippear pagina 1 → marca 1 y 2 (partner correcto para 0-indexed)
+- [ ] Custombook: pagina 0 no tiene partner (especial, solo frente)
+
+#### Fix custombook tras rip+L - BATCH 8
+**Preparacion:** custombook abierto, seleccionar pagina, rippear, presionar L
+
+- [ ] Custombook: seleccionar pagina → mantener P 3s → overlay aparece
+- [ ] Presionar L → overlay desaparece, hoja se deja en el mundo
+- [ ] Volver a navegar custombook → NO muestra ambas paginas como ripped/bloqueado
+- [ ] s_cbSelectedPage se deselecciona automaticamente si apunta a pagina ripped
+- [ ] Custombook sigue funcionando normalmente tras L
+
+#### Glow rojo + relleno gris - BATCH 8
+**Preparacion:** rippear pagina del journal o custombook, navegar a la vista
+
+- [ ] Pagina ripped en journal → glow ROJO pulsante (no azul como antes)
+- [ ] Slot de pagina ripped → fondo GRIS oscuro (80,75,70) en vez de pergamino
+- [ ] Bordes rasgados del slot → gris (100,95,88) en vez de pergamino claro
+- [ ] Lineas diagonales gruesas (2.5px) grises sutiles visibles dentro del slot
+- [ ] Signos "?" gris transparente esparcidos con jitter dentro del slot
+- [ ] Mismo visual rojo+gris en custombook
+
+#### Barrita ripping custombook - BATCH 8
+**Preparacion:** custombook abierto, seleccionar pagina, mantener P
+
+- [ ] Custombook: mantener P → barra "Ripping page..." aparece AL FRENTE de todo
+- [ ] Barra visible sobre el libro, no detras del ImGui
+- [ ] Barra usa GetForegroundDrawList() para Z-order correcto
+
+#### Efecto restaurado aclarado - BATCH 8
+**Preparacion:** rippear pagina, presionar ESC para restaurar
+
+- [ ] Pagina restaurada → color (192,183,160) mas claro que antes (175,165,140)
+- [ ] Sigue siendo mas oscuro que pagina normal (210,200,175)
+- [ ] Diferencia sutil pero perceptible
+
+#### Dano acumulativo - BATCH 8
+**Preparacion:** misma pagina, ciclar rip → ESC restore multiples veces
+
+- [ ] 1er ciclo: rippear → ESC restore → contador = 1 (dano minimo)
+- [ ] 2do ciclo: rippear → ESC restore → contador = 2 (dano aumenta)
+- [ ] 3er ciclo: rippear → ESC restore → contador = 3
+- [ ] 4to ciclo: rippear → ESC restore → contador = 4
+- [ ] 5to ciclo: rippear → ESC restore → contador = 5 (dano maximo)
+- [ ] 6to ciclo: rippear → ESC restore → contador se estanca en 5
+- [ ] Verificar damaged_pages.ini tiene formato Page=N,count
+- [ ] Cerrar y reabrir juego → contador se mantiene (persistencia)
+- [ ] Contador 1: arrugas sutiles, manchas tenues
+- [ ] Contador 5: arrugas muy visibles, manchas oscuras, tajos marcados, 70% ilegible
+- [ ] Color de fondo se oscurece progresivamente con contador alto
+- [ ] Texto bajo quiebres no legible con contador 5
+
+#### Tinte nocturno - BATCH 8
+**Preparacion:** esperar a que sea de dia y de noche en el juego
+
+- [ ] De dia (06:00-21:00): tinte (100,90,75,100) - pergamino brillante
+- [ ] De noche (21:00-06:00): tinte (85,77,64,100) - 15% menos brillante
+- [ ] Diferencia sutil pero perceptible entre dia y noche
+- [ ] Alpha igual (100), solo RGB reducido en noche
+
+---
 
 #### Restored page damage overlay - FIX CRITICO BATCH 7
 **Preparacion:** abre el journal (J), escribe algo en una pagina, arranca la pagina (P 3s), presiona ESC en overlay
