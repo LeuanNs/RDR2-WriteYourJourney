@@ -54,8 +54,8 @@ namespace Sheets
 	static std::unordered_set<int> s_rippedJournalPages;
 	static std::unordered_map<std::string, std::unordered_set<int>> s_rippedCustomPages;
 	
-	static std::unordered_set<int> s_restoredJournalPages;
-	static std::unordered_map<std::string, std::unordered_set<int>> s_restoredCustomPages;
+	static std::unordered_set<int> s_damagedJournalPages;
+	static std::unordered_map<std::string, std::unordered_set<int>> s_damagedCustomPages;
 
 	static std::vector<DiscoverableSheet> s_discoverableSheets;
 	static int s_nearbySheetId = -1;
@@ -94,12 +94,65 @@ namespace Sheets
 		return fs::path(WJConfig::GetModuleDir()) / "myjourney" / "ripped_pages.ini";
 	}
 
+	static fs::path GetDamagedPagesPath()
+	{
+		return fs::path(WJConfig::GetModuleDir()) / "myjourney" / "damaged_pages.ini";
+	}
+
 	static std::string Trim(const std::string& s)
 	{
 		size_t a = s.find_first_not_of(" \t\r\n");
 		if (a == std::string::npos) return "";
 		size_t b = s.find_last_not_of(" \t\r\n");
 		return s.substr(a, b - a + 1);
+	}
+
+	static void SaveDamagedPagesIndex()
+	{
+		std::ofstream out(GetDamagedPagesPath());
+		if (!out) return;
+		out << "[Journal]\n";
+		for (int p : s_damagedJournalPages)
+			out << "Page=" << p << "\n";
+		for (const auto& [bookName, pages] : s_damagedCustomPages)
+		{
+			out << "\n[Custom:" << bookName << "]\n";
+			for (int p : pages)
+				out << "Page=" << p << "\n";
+		}
+	}
+
+	static void LoadDamagedPagesIndex()
+	{
+		s_damagedJournalPages.clear();
+		s_damagedCustomPages.clear();
+		std::ifstream in(GetDamagedPagesPath());
+		if (!in) return;
+		std::string line;
+		std::string currentBook;
+		bool inJournal = false;
+		while (std::getline(in, line))
+		{
+			line = Trim(line);
+			if (line.empty()) continue;
+			if (line == "[Journal]") { inJournal = true; currentBook.clear(); continue; }
+			if (line.substr(0, 8) == "[Custom:")
+			{
+				inJournal = false;
+				size_t end = line.find(']', 8);
+				if (end != std::string::npos)
+					currentBook = line.substr(8, end - 8);
+				continue;
+			}
+			if (line.substr(0, 5) == "Page=")
+			{
+				int pg = std::atoi(line.substr(5).c_str());
+				if (inJournal)
+					s_damagedJournalPages.insert(pg);
+				else if (!currentBook.empty())
+					s_damagedCustomPages[currentBook].insert(pg);
+			}
+		}
 	}
 
 	int GetPartnerPage(int page)
@@ -312,6 +365,7 @@ namespace Sheets
 	{
 		if (!WJConfig::RipSheetsEnabled) return;
 		LoadRippedPagesIndex();
+		LoadDamagedPagesIndex();
 		ScanSheets();
 	}
 
@@ -354,9 +408,9 @@ namespace Sheets
 	bool IsPageRestored(int page, bool isJournal, const std::string& bookName)
 	{
 		if (isJournal)
-			return s_restoredJournalPages.count(page) > 0;
-		auto it = s_restoredCustomPages.find(bookName);
-		if (it == s_restoredCustomPages.end()) return false;
+			return s_damagedJournalPages.count(page) > 0;
+		auto it = s_damagedCustomPages.find(bookName);
+		if (it == s_damagedCustomPages.end()) return false;
 		return it->second.count(page) > 0;
 	}
 
@@ -573,8 +627,8 @@ namespace Sheets
 		{
 			s_rippedJournalPages.erase(page);
 			if (partner > 0) s_rippedJournalPages.erase(partner);
-			s_restoredJournalPages.insert(page);
-			if (partner > 0) s_restoredJournalPages.insert(partner);
+			s_damagedJournalPages.insert(page);
+			if (partner > 0) s_damagedJournalPages.insert(partner);
 		}
 		else
 		{
@@ -584,12 +638,13 @@ namespace Sheets
 				it->second.erase(page);
 				if (partner > 0) it->second.erase(partner);
 			}
-			s_restoredCustomPages[s_overlayCache.bookName].insert(page);
-			if (partner > 0) s_restoredCustomPages[s_overlayCache.bookName].insert(partner);
+			s_damagedCustomPages[s_overlayCache.bookName].insert(page);
+			if (partner > 0) s_damagedCustomPages[s_overlayCache.bookName].insert(partner);
 			CustomBooks::RestorePage(s_overlayCache.bookName, page);
 		}
 
 		SaveRippedPagesIndex();
+		SaveDamagedPagesIndex();
 		
 		s_restoreCache = s_overlayCache;
 		s_restoreAnimating = true;
@@ -614,46 +669,116 @@ namespace Sheets
 				if (sheet.id == s_viewingSheetId)
 				{
 					fs::path dir = GetDiscoverablesDir() / ("SHEET" + std::to_string(sheet.id));
-					fs::path locPath = dir / "location.ini";
-					if (fs::exists(locPath))
-					{
-						std::ifstream in(locPath);
-						std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-						in.close();
-						size_t pos = content.find("Collected=");
-						if (pos != std::string::npos)
-						{
-							size_t endLine = content.find('\n', pos);
-							if (endLine != std::string::npos)
-								content.replace(pos, endLine - pos, "Collected=1");
-							else
-								content.replace(pos, content.size() - pos, "Collected=1");
-						}
-						else
-						{
-							content += "\nCollected=1\n";
-						}
-						std::ofstream out(locPath, std::ios::trunc);
-						if (out) out << content;
-					}
-					sheet.collected = true;
-
-					// Restore the page to its original journal/custombook with damaged visual
+					
+					// Restore content to original location
 					if (sheet.originalPage > 0)
 					{
-						int partner = GetPartnerPage(sheet.originalPage);
+						fs::path sheetTxtPath = dir / "sheet.txt";
+						fs::path sheetDrawPath = dir / "sheet_draw.dat";
+						
 						if (sheet.fromJournal)
 						{
-							s_restoredJournalPages.insert(sheet.originalPage);
-							if (partner > 0) s_restoredJournalPages.insert(partner);
+							// Restore to journal: MyJourney/Myself/C1/pagX.txt
+							fs::path journalDir = fs::path(WJConfig::GetModuleDir()) / "myjourney" / "Myself" / "C1";
+							fs::create_directories(journalDir);
+							
+							// Restore text
+							if (fs::exists(sheetTxtPath))
+							{
+								fs::path pagTxtPath = journalDir / ("pag" + std::to_string(sheet.originalPage) + ".txt");
+								fs::copy_file(sheetTxtPath, pagTxtPath, fs::copy_options::overwrite_existing);
+							}
+							
+							// Restore drawing
+							if (fs::exists(sheetDrawPath))
+							{
+								fs::path pagDrawPath = journalDir / ("pag" + std::to_string(sheet.originalPage) + "_draw.dat");
+								fs::copy_file(sheetDrawPath, pagDrawPath, fs::copy_options::overwrite_existing);
+							}
+							
+							// Mark as damaged (shows wrinkled visual permanently)
+							int partner = GetPartnerPage(sheet.originalPage);
+							s_damagedJournalPages.insert(sheet.originalPage);
+							if (partner > 0) s_damagedJournalPages.insert(partner);
+							
+							// Remove from ripped pages
+							s_rippedJournalPages.erase(sheet.originalPage);
+							if (partner > 0) s_rippedJournalPages.erase(partner);
 						}
 						else if (!sheet.bookName.empty())
 						{
-							s_restoredCustomPages[sheet.bookName].insert(sheet.originalPage);
-							if (partner > 0) s_restoredCustomPages[sheet.bookName].insert(partner);
+							// Restore to custombook: MyJourney/Books/bookName/body.txt
+							fs::path bookDir = fs::path(WJConfig::GetModuleDir()) / "MyJourney" / "Books" / sheet.bookName;
+							
+							if (fs::exists(sheetTxtPath))
+							{
+								// Read sheet content
+								std::ifstream sheetFile(sheetTxtPath);
+								std::string sheetContent((std::istreambuf_iterator<char>(sheetFile)), std::istreambuf_iterator<char>());
+								sheetFile.close();
+								
+								// Read body.txt
+								fs::path bodyPath = bookDir / "body.txt";
+								if (fs::exists(bodyPath))
+								{
+									std::ifstream bodyFile(bodyPath);
+									std::vector<std::string> lines;
+									std::string line;
+									while (std::getline(bodyFile, line))
+										lines.push_back(line);
+									bodyFile.close();
+									
+									// Calculate line range for this page (approximate)
+									int linesPerPage = 12; // approximate
+									int startLine = (sheet.originalPage - 1) * linesPerPage;
+									
+									// Split sheet content into lines
+									std::vector<std::string> sheetLines;
+									std::istringstream iss(sheetContent);
+									std::string sheetLine;
+									while (std::getline(iss, sheetLine))
+										sheetLines.push_back(sheetLine);
+									
+									// Replace lines in body
+									for (size_t i = 0; i < sheetLines.size() && (startLine + i) < lines.size(); ++i)
+										lines[startLine + i] = sheetLines[i];
+									
+									// Write back to body.txt
+									std::ofstream outBody(bodyPath);
+									for (const auto& l : lines)
+										outBody << l << "\n";
+									outBody.close();
+								}
+							}
+							
+							// Mark as damaged
+							int partner = GetPartnerPage(sheet.originalPage);
+							s_damagedCustomPages[sheet.bookName].insert(sheet.originalPage);
+							if (partner > 0) s_damagedCustomPages[sheet.bookName].insert(partner);
+							
+							// Remove from ripped pages
+							auto it = s_rippedCustomPages.find(sheet.bookName);
+							if (it != s_rippedCustomPages.end())
+							{
+								it->second.erase(sheet.originalPage);
+								if (partner > 0) it->second.erase(partner);
+							}
+							
 							CustomBooks::RestorePage(sheet.bookName, sheet.originalPage);
 						}
+						
+						// Save indexes
+						SaveRippedPagesIndex();
+						SaveDamagedPagesIndex();
 					}
+					
+					// Delete the discoverable folder
+					if (fs::exists(dir) && fs::is_directory(dir))
+					{
+						fs::remove_all(dir);
+					}
+					
+					sheet.collected = true;
 					break;
 				}
 			}
