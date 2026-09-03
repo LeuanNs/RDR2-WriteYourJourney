@@ -41,8 +41,8 @@ std::string CImGuiMenu::s_journalTitle = "Arthur's Journey";
 namespace
 {
 	void DrawRippedPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, float pulse);
-	void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, bool isLeft);
-	void DrawRestoredPageDamageOverlay(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, bool isLeft);
+	void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, bool isLeft, int damageCount = 1);
+	void DrawRestoredPageDamageOverlay(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, bool isLeft, int damageCount = 1);
 
 	// Mitigacion de antivirus: validar ventana activa antes de leer teclado
 	bool GameHasFocus()
@@ -552,7 +552,7 @@ namespace
 	{
 		if (!IsNightHour(s_worldHour.load()))
 			return FadeCol(IM_COL32(100, 90, 75, 100), A);
-		return FadeCol(IM_COL32(60, 55, 45, 160), A);
+		return FadeCol(IM_COL32(85, 77, 64, 100), A);
 	}
 
 	void DrawRuledLines(ImDrawList* dl, const BookGeom& g,
@@ -686,7 +686,7 @@ namespace
 		float jagSize = 8.f;
 		float step = 8.f;
 
-		dl->AddRectFilled(pgMin, pgMax, FadeCol(IM_COL32(160, 145, 115, 140), A));
+		dl->AddRectFilled(pgMin, pgMax, FadeCol(IM_COL32(80, 75, 70, 200), A));
 
 		std::vector<ImVec2> tornEdge;
 		if (isLeft)
@@ -711,24 +711,31 @@ namespace
 		}
 
 		if (tornEdge.size() >= 3)
-			dl->AddConvexPolyFilled(tornEdge.data(), (int)tornEdge.size(), FadeCol(IM_COL32(190, 180, 155, 180), A));
+			dl->AddConvexPolyFilled(tornEdge.data(), (int)tornEdge.size(), FadeCol(IM_COL32(100, 95, 88, 220), A));
 
-		for (int i = 0; i < 8; ++i)
+		float pageW = pgMax.x - pgMin.x;
+		float pageH = pgMax.y - pgMin.y;
+		float spacing = 25.f;
+		for (float offset = -pageH; offset < pageW + pageH; offset += spacing)
 		{
-			float rx = pgMin.x + Rng(seed) * (pgMax.x - pgMin.x);
-			float ry = pgMin.y + Rng(seed) * (pgMax.y - pgMin.y);
-			float rr = 2.f + Rng(seed) * 5.f;
-			dl->AddCircleFilled({ rx, ry }, rr, FadeCol(IM_COL32(220, 210, 190, 100), A), 6);
+			float x1 = pgMin.x + offset;
+			float y1 = pgMin.y;
+			float x2 = x1 + pageH;
+			float y2 = pgMax.y;
+			dl->AddLine({ x1, y1 }, { x2, y2 }, FadeCol(IM_COL32(120, 115, 108, 80), A), 2.5f);
 		}
 
-		for (int i = 0; i < 3; ++i)
+		ImFont* df = ImGui::GetFont();
+		float qSize = df->FontSize * 0.7f;
+		float qSpacing = 35.f;
+		for (float qy = pgMin.y + 15.f; qy < pgMax.y - 10.f; qy += qSpacing)
 		{
-			float sx = isLeft ? (pgMax.x - 5.f - Rng(seed) * 15.f) : (pgMin.x + 5.f + Rng(seed) * 15.f);
-			float sy = pgMin.y + (pgMax.y - pgMin.y) * (0.2f + Rng(seed) * 0.6f);
-			float sLen = 8.f + Rng(seed) * 12.f;
-			float sAngle = (Rng(seed) - 0.5f) * 0.6f;
-			dl->AddLine({ sx, sy }, { sx + std::cos(sAngle) * sLen, sy + std::sin(sAngle) * sLen },
-			            FadeCol(IM_COL32(100, 90, 70, 160), A), 1.5f);
+			for (float qx = pgMin.x + 15.f; qx < pgMax.x - 10.f; qx += qSpacing)
+			{
+				float jx = qx + (Rng(seed) - 0.5f) * 10.f;
+				float jy = qy + (Rng(seed) - 0.5f) * 10.f;
+				dl->AddText(df, qSize, { jx, jy }, FadeCol(IM_COL32(140, 135, 125, 100), A), "?");
+			}
 		}
 	}
 
@@ -783,7 +790,8 @@ namespace
 		}
 		else if (leftRestored)
 		{
-			DrawRestoredPage(dl, g.leftMin, g.leftMax, A, true);
+			int dmgCount = Sheets::GetPageDamageCount(s_pagePair, true);
+			DrawRestoredPage(dl, g.leftMin, g.leftMax, A, true, dmgCount);
 		}
 		else
 			dl->AddRectFilled(g.leftMin, g.leftMax, FadeCol(IM_COL32(210, 200, 175, 255), A));
@@ -802,7 +810,8 @@ namespace
 		}
 		else if (rightRestored)
 		{
-			DrawRestoredPage(dl, g.rightMin, g.rightMax, A, false);
+			int dmgCount = Sheets::GetPageDamageCount(s_pagePair + 1, true);
+			DrawRestoredPage(dl, g.rightMin, g.rightMax, A, false, dmgCount);
 		}
 		else
 			dl->AddRectFilled(g.rightMin, g.rightMax, FadeCol(IM_COL32(205, 195, 168, 255), A));
@@ -1034,16 +1043,16 @@ namespace
 		const int alpha3 = (int)(A * (100.f + 50.f * pulse));
 		
 		dl->AddRectFilled({ mn.x - 12.f, mn.y - 12.f }, { mx.x + 12.f, mx.y + 12.f },
-		                  IM_COL32(0, 150, 255, std::clamp(alpha3, 0, 255)), 6.f);
+		                  IM_COL32(255, 50, 50, std::clamp(alpha3, 0, 255)), 6.f);
 		dl->AddRectFilled({ mn.x - 8.f, mn.y - 8.f }, { mx.x + 8.f, mx.y + 8.f },
-		                  IM_COL32(0, 180, 255, std::clamp(alpha2, 0, 255)), 5.f);
+		                  IM_COL32(255, 80, 80, std::clamp(alpha2, 0, 255)), 5.f);
 		dl->AddRect({ mn.x - 4.f, mn.y - 4.f }, { mx.x + 4.f, mx.y + 4.f },
-		            IM_COL32(50, 200, 255, std::clamp(alpha1, 0, 255)), 4.f, 0, 4.f);
+		            IM_COL32(255, 100, 100, std::clamp(alpha1, 0, 255)), 4.f, 0, 4.f);
 		dl->AddRect({ mn.x - 1.f, mn.y - 1.f }, { mx.x + 1.f, mx.y + 1.f },
-		            IM_COL32(100, 220, 255, std::clamp(alpha1, 0, 255)), 3.f, 0, 2.5f);
+		            IM_COL32(255, 120, 120, std::clamp(alpha1, 0, 255)), 3.f, 0, 2.5f);
 	}
 
-	void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, bool isLeft)
+	void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, bool isLeft, int damageCount)
 	{
 		unsigned seed = isLeft ? 3456u : 7890u;
 		auto rng = [](unsigned& s) -> float {
@@ -1051,16 +1060,29 @@ namespace
 			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
 		};
 
-		dl->AddRectFilled(mn, mx, FadeCol(IM_COL32(175, 165, 140, 255), A));
+		float t = (damageCount - 1) / 4.f;
+		if (t < 0.f) t = 0.f;
+		if (t > 1.f) t = 1.f;
+		int r = (int)(192.f + t * (160.f - 192.f));
+		int g = (int)(183.f + t * (150.f - 183.f));
+		int b = (int)(160.f + t * (130.f - 160.f));
+		dl->AddRectFilled(mn, mx, FadeCol(IM_COL32(r, g, b, 255), A));
 	}
 
-	void DrawRestoredPageDamageOverlay(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, bool isLeft)
+	void DrawRestoredPageDamageOverlay(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, bool isLeft, int damageCount)
 	{
+		if (damageCount < 1) return;
+		float intensity = damageCount / 5.f;
+		if (intensity > 1.f) intensity = 1.f;
 		unsigned seed = isLeft ? 3456u : 7890u;
 		auto rng = [](unsigned& s) -> float {
 			s = s * 1664525u + 1013904223u;
 			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
 		};
+
+		int wrinkleAlpha = (int)(60.f + intensity * 120.f);
+		int stainAlpha = (int)(40.f + intensity * 100.f);
+		int tearAlpha = (int)(80.f + intensity * 140.f);
 
 		for (int i = 0; i < 14; ++i)
 		{
@@ -1068,7 +1090,7 @@ namespace
 			float y2 = y1 + (rng(seed) - 0.5f) * 30.f;
 			float x1 = mn.x + rng(seed) * (mx.x - mn.x) * 0.2f;
 			float x2 = x1 + (mx.x - mn.x) * (0.5f + rng(seed) * 0.5f);
-			dl->AddLine({ x1, y1 }, { x2, y2 }, FadeCol(IM_COL32(140, 130, 110, 120), A), 1.5f);
+			dl->AddLine({ x1, y1 }, { x2, y2 }, FadeCol(IM_COL32(140, 130, 110, wrinkleAlpha), A), 1.5f);
 		}
 
 		for (int i = 0; i < 8; ++i)
@@ -1076,7 +1098,7 @@ namespace
 			float cx = mn.x + rng(seed) * (mx.x - mn.x);
 			float cy = mn.y + rng(seed) * (mx.y - mn.y);
 			float r = 4.f + rng(seed) * 12.f;
-			dl->AddCircleFilled({ cx, cy }, r, FadeCol(IM_COL32(130, 120, 100, 90), A), 8);
+			dl->AddCircleFilled({ cx, cy }, r, FadeCol(IM_COL32(130, 120, 100, stainAlpha), A), 8);
 		}
 
 		for (int i = 0; i < 5; ++i)
@@ -1085,7 +1107,7 @@ namespace
 			float y1 = mn.y + rng(seed) * (mx.y - mn.y);
 			float x2 = x1 + (rng(seed) - 0.5f) * 40.f;
 			float y2 = y1 + (rng(seed) - 0.5f) * 40.f;
-			dl->AddLine({ x1, y1 }, { x2, y2 }, FadeCol(IM_COL32(120, 110, 90, 100), A), 1.f);
+			dl->AddLine({ x1, y1 }, { x2, y2 }, FadeCol(IM_COL32(120, 110, 90, stainAlpha), A), 1.f);
 		}
 
 		float tearSize = 12.f + rng(seed) * 10.f;
@@ -1111,7 +1133,7 @@ namespace
 			topTear.push_back({ mn.x + tearSize * 3.f, mn.y });
 		}
 		if (topTear.size() >= 3)
-			dl->AddConvexPolyFilled(topTear.data(), (int)topTear.size(), FadeCol(IM_COL32(160, 150, 125, 220), A));
+			dl->AddConvexPolyFilled(topTear.data(), (int)topTear.size(), FadeCol(IM_COL32(160, 150, 125, tearAlpha), A));
 
 		std::vector<ImVec2> bottomTear;
 		if (isLeft)
@@ -1135,7 +1157,7 @@ namespace
 			bottomTear.push_back({ mn.x + tearSize * 2.5f, mx.y });
 		}
 		if (bottomTear.size() >= 3)
-			dl->AddConvexPolyFilled(bottomTear.data(), (int)bottomTear.size(), FadeCol(IM_COL32(160, 150, 125, 220), A));
+			dl->AddConvexPolyFilled(bottomTear.data(), (int)bottomTear.size(), FadeCol(IM_COL32(160, 150, 125, tearAlpha), A));
 
 		for (int i = 0; i < 6; ++i)
 		{
@@ -2364,10 +2386,11 @@ void CImGuiMenu::Render()
 			bool isLeft = (s_selectedPage % 2 == 1);
 			if (Sheets::IsPageRestored(s_selectedPage, true))
 			{
+				int dmgCount = Sheets::GetPageDamageCount(s_selectedPage, true);
 				ImDrawList* fgDl = ImGui::GetForegroundDrawList();
 				const ImVec2 pmin = PageMin(g, s_selectedPage);
 				const ImVec2 pmax = PageMax(g, s_selectedPage);
-				DrawRestoredPageDamageOverlay(fgDl, pmin, pmax, s_fadeIn, isLeft);
+				DrawRestoredPageDamageOverlay(fgDl, pmin, pmax, s_fadeIn, isLeft, dmgCount);
 			}
 		}
 	}

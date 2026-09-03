@@ -71,6 +71,8 @@ namespace Sheets
 
 	bool IsPageRipped(int page, bool isJournal, const std::string& bookName = "");
 	bool IsPageRestored(int page, bool isJournal, const std::string& bookName = "");
+	int GetPageDamageCount(int page, bool isJournal, const std::string& bookName = "");
+	void IncrementPageDamage(int page, bool isJournal, const std::string& bookName = "");
 	int GetNextVisiblePage(int startPage);
 	int GetPartnerPage(int page);
 

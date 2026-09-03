@@ -18,8 +18,8 @@ namespace CustomBooks
 	static std::vector<std::string> WrapText(const std::string& text, float maxWidth, ImFont* f, float fontSize);
 	static void DrawPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float pulse);
 	static void DrawRippedPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float pulse);
-	static void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft);
-	static void DrawRestoredPageDamageOverlay(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft);
+	static void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft, int damageCount);
+	static void DrawRestoredPageDamageOverlay(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft, int damageCount);
 	static void DrawRippedPageSlot(ImDrawList* dl, ImVec2 pgMin, ImVec2 pgMax, bool isLeft);
 
 	static std::vector<std::string> s_availableBooks;
@@ -908,6 +908,11 @@ namespace CustomBooks
 		if (book.edits.empty())
 			LoadEdits(s_currentBook);
 
+		if (s_cbSelectedPage >= 0 && IsPageRipped(s_currentBook, s_cbSelectedPage) && !Sheets::IsShowingOverlay() && !Sheets::IsAnimating() && !Sheets::IsRipping())
+		{
+			s_cbSelectedPage = -1;
+		}
+
 		ImGuiIO& io = ImGui::GetIO();
 		ImDrawList* dl = ImGui::GetBackgroundDrawList();
 		ImVec2 ds = io.DisplaySize;
@@ -1004,7 +1009,8 @@ namespace CustomBooks
 				bool isLeft = (pageIdx % 2 == 0);
 				ImVec2 pgMin{ px, py };
 				ImVec2 pgMax{ px + pw, py + bookH - margin * 2.f };
-				DrawRestoredPage(dl, pgMin, pgMax, isLeft);
+				int dmgCount = Sheets::GetPageDamageCount(pageIdx, false, s_currentBook);
+				DrawRestoredPage(dl, pgMin, pgMax, isLeft, dmgCount);
 			}
 
 			int startLine = pageIdx * linesPerPage - book.lazyStartLine;
@@ -1087,8 +1093,9 @@ namespace CustomBooks
 				bool isLeft = (pageIdx % 2 == 0);
 				ImVec2 pgMin{ px, py };
 				ImVec2 pgMax{ px + pw, py + bookH - margin * 2.f };
+				int dmgCount = Sheets::GetPageDamageCount(pageIdx, false, s_currentBook);
 				ImDrawList* fgDl = ImGui::GetForegroundDrawList();
-				DrawRestoredPageDamageOverlay(fgDl, pgMin, pgMax, isLeft);
+				DrawRestoredPageDamageOverlay(fgDl, pgMin, pgMax, isLeft, dmgCount);
 			}
 		};
 
@@ -1253,7 +1260,7 @@ namespace CustomBooks
 			{
 				if (!IsPageRipped(s_currentBook, s_cbSelectedPage))
 				{
-					int partner = Sheets::GetPartnerPage(s_cbSelectedPage);
+					int partner = Sheets::GetPartnerPage(s_cbSelectedPage + 1) - 1;
 					std::string pageText;
 					int startLine = s_cbSelectedPage * linesPerPage;
 					for (int l = 0; l < linesPerPage && (startLine + l) < (int)wrappedLines.size(); ++l)
@@ -1710,8 +1717,8 @@ namespace CustomBooks
 	void RipPage(const std::string& bookName, int page)
 	{
 		s_rippedCustomBookPages[bookName].insert(page);
-		int partner = Sheets::GetPartnerPage(page);
-		if (partner > 0)
+		int partner = Sheets::GetPartnerPage(page + 1) - 1;
+		if (partner >= 0)
 			s_rippedCustomBookPages[bookName].insert(partner);
 	}
 
@@ -1720,8 +1727,8 @@ namespace CustomBooks
 		auto it = s_rippedCustomBookPages.find(bookName);
 		if (it == s_rippedCustomBookPages.end()) return;
 		it->second.erase(page);
-		int partner = Sheets::GetPartnerPage(page);
-		if (partner > 0)
+		int partner = Sheets::GetPartnerPage(page + 1) - 1;
+		if (partner >= 0)
 			it->second.erase(partner);
 	}
 
@@ -1805,27 +1812,40 @@ namespace CustomBooks
 		const int alpha3 = (int)(100.f + 50.f * pulse);
 		
 		dl->AddRectFilled({ mn.x - 12.f, mn.y - 12.f }, { mx.x + 12.f, mx.y + 12.f },
-		                  IM_COL32(0, 150, 255, std::clamp(alpha3, 0, 255)), 6.f);
+		                  IM_COL32(255, 50, 50, std::clamp(alpha3, 0, 255)), 6.f);
 		dl->AddRectFilled({ mn.x - 8.f, mn.y - 8.f }, { mx.x + 8.f, mx.y + 8.f },
-		                  IM_COL32(0, 180, 255, std::clamp(alpha2, 0, 255)), 5.f);
+		                  IM_COL32(255, 80, 80, std::clamp(alpha2, 0, 255)), 5.f);
 		dl->AddRect({ mn.x - 4.f, mn.y - 4.f }, { mx.x + 4.f, mx.y + 4.f },
-		            IM_COL32(50, 200, 255, std::clamp(alpha1, 0, 255)), 4.f, 0, 4.f);
+		            IM_COL32(255, 100, 100, std::clamp(alpha1, 0, 255)), 4.f, 0, 4.f);
 		dl->AddRect({ mn.x - 1.f, mn.y - 1.f }, { mx.x + 1.f, mx.y + 1.f },
-		            IM_COL32(100, 220, 255, std::clamp(alpha1, 0, 255)), 3.f, 0, 2.5f);
+		            IM_COL32(255, 120, 120, std::clamp(alpha1, 0, 255)), 3.f, 0, 2.5f);
 	}
 
-	static void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft)
+	static void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft, int damageCount)
 	{
-		dl->AddRectFilled(mn, mx, IM_COL32(175, 165, 140, 255));
+		float t = (damageCount - 1) / 4.f;
+		if (t < 0.f) t = 0.f;
+		if (t > 1.f) t = 1.f;
+		int r = (int)(192.f + t * (160.f - 192.f));
+		int g = (int)(183.f + t * (150.f - 183.f));
+		int b = (int)(160.f + t * (130.f - 160.f));
+		dl->AddRectFilled(mn, mx, IM_COL32(r, g, b, 255));
 	}
 
-	static void DrawRestoredPageDamageOverlay(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft)
+	static void DrawRestoredPageDamageOverlay(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft, int damageCount)
 	{
+		if (damageCount < 1) return;
+		float intensity = damageCount / 5.f;
+		if (intensity > 1.f) intensity = 1.f;
 		unsigned seed = isLeft ? 3456u : 7890u;
 		auto rng = [](unsigned& s) -> float {
 			s = s * 1664525u + 1013904223u;
 			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
 		};
+
+		int wrinkleAlpha = (int)(60.f + intensity * 120.f);
+		int stainAlpha = (int)(40.f + intensity * 100.f);
+		int tearAlpha = (int)(80.f + intensity * 140.f);
 
 		for (int i = 0; i < 14; ++i)
 		{
@@ -1833,7 +1853,7 @@ namespace CustomBooks
 			float y2 = y1 + (rng(seed) - 0.5f) * 30.f;
 			float x1 = mn.x + rng(seed) * (mx.x - mn.x) * 0.2f;
 			float x2 = x1 + (mx.x - mn.x) * (0.5f + rng(seed) * 0.5f);
-			dl->AddLine({ x1, y1 }, { x2, y2 }, IM_COL32(140, 130, 110, 120), 1.5f);
+			dl->AddLine({ x1, y1 }, { x2, y2 }, IM_COL32(140, 130, 110, wrinkleAlpha), 1.5f);
 		}
 
 		for (int i = 0; i < 8; ++i)
@@ -1841,7 +1861,7 @@ namespace CustomBooks
 			float cx = mn.x + rng(seed) * (mx.x - mn.x);
 			float cy = mn.y + rng(seed) * (mx.y - mn.y);
 			float r = 4.f + rng(seed) * 12.f;
-			dl->AddCircleFilled({ cx, cy }, r, IM_COL32(130, 120, 100, 90), 8);
+			dl->AddCircleFilled({ cx, cy }, r, IM_COL32(130, 120, 100, stainAlpha), 8);
 		}
 
 		for (int i = 0; i < 5; ++i)
@@ -1850,7 +1870,7 @@ namespace CustomBooks
 			float y1 = mn.y + rng(seed) * (mx.y - mn.y);
 			float x2 = x1 + (rng(seed) - 0.5f) * 40.f;
 			float y2 = y1 + (rng(seed) - 0.5f) * 40.f;
-			dl->AddLine({ x1, y1 }, { x2, y2 }, IM_COL32(120, 110, 90, 100), 1.f);
+			dl->AddLine({ x1, y1 }, { x2, y2 }, IM_COL32(120, 110, 90, stainAlpha), 1.f);
 		}
 
 		float tearSize = 12.f + rng(seed) * 10.f;
@@ -1876,7 +1896,7 @@ namespace CustomBooks
 			topTear.push_back({ mn.x + tearSize * 3.f, mn.y });
 		}
 		if (topTear.size() >= 3)
-			dl->AddConvexPolyFilled(topTear.data(), (int)topTear.size(), IM_COL32(160, 150, 125, 220));
+			dl->AddConvexPolyFilled(topTear.data(), (int)topTear.size(), IM_COL32(160, 150, 125, tearAlpha));
 
 		std::vector<ImVec2> bottomTear;
 		if (isLeft)
@@ -1900,7 +1920,7 @@ namespace CustomBooks
 			bottomTear.push_back({ mn.x + tearSize * 2.5f, mx.y });
 		}
 		if (bottomTear.size() >= 3)
-			dl->AddConvexPolyFilled(bottomTear.data(), (int)bottomTear.size(), IM_COL32(160, 150, 125, 220));
+			dl->AddConvexPolyFilled(bottomTear.data(), (int)bottomTear.size(), IM_COL32(160, 150, 125, tearAlpha));
 
 		for (int i = 0; i < 6; ++i)
 		{
@@ -1909,7 +1929,7 @@ namespace CustomBooks
 			float sLen = 8.f + rng(seed) * 16.f;
 			float sAngle = (rng(seed) - 0.5f) * 0.7f;
 			dl->AddLine({ sx, sy }, { sx + std::cos(sAngle) * sLen, sy + std::sin(sAngle) * sLen },
-			            IM_COL32(100, 90, 70, 180), 2.f);
+			            IM_COL32(100, 90, 70, tearAlpha), 2.f);
 		}
 
 		for (int i = 0; i < 4; ++i)
@@ -1932,7 +1952,7 @@ namespace CustomBooks
 			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
 		};
 
-		dl->AddRectFilled(pgMin, pgMax, IM_COL32(160, 145, 115, 140));
+		dl->AddRectFilled(pgMin, pgMax, IM_COL32(80, 75, 70, 200));
 
 		std::vector<ImVec2> tornEdge;
 		if (isLeft)
@@ -1957,24 +1977,31 @@ namespace CustomBooks
 		}
 
 		if (tornEdge.size() >= 3)
-			dl->AddConvexPolyFilled(tornEdge.data(), (int)tornEdge.size(), IM_COL32(190, 180, 155, 180));
+			dl->AddConvexPolyFilled(tornEdge.data(), (int)tornEdge.size(), IM_COL32(100, 95, 88, 220));
 
-		for (int i = 0; i < 8; ++i)
+		float pageW = pgMax.x - pgMin.x;
+		float pageH = pgMax.y - pgMin.y;
+		float spacing = 25.f;
+		for (float offset = -pageH; offset < pageW + pageH; offset += spacing)
 		{
-			float rx = pgMin.x + rng(seed) * (pgMax.x - pgMin.x);
-			float ry = pgMin.y + rng(seed) * (pgMax.y - pgMin.y);
-			float rr = 2.f + rng(seed) * 5.f;
-			dl->AddCircleFilled({ rx, ry }, rr, IM_COL32(220, 210, 190, 100), 6);
+			float x1 = pgMin.x + offset;
+			float y1 = pgMin.y;
+			float x2 = x1 + pageH;
+			float y2 = pgMax.y;
+			dl->AddLine({ x1, y1 }, { x2, y2 }, IM_COL32(120, 115, 108, 80), 2.5f);
 		}
 
-		for (int i = 0; i < 3; ++i)
+		ImFont* df = ImGui::GetFont();
+		float qSize = df->FontSize * 0.7f;
+		float qSpacing = 35.f;
+		for (float qy = pgMin.y + 15.f; qy < pgMax.y - 10.f; qy += qSpacing)
 		{
-			float sx = isLeft ? (pgMax.x - 5.f - rng(seed) * 15.f) : (pgMin.x + 5.f + rng(seed) * 15.f);
-			float sy = pgMin.y + (pgMax.y - pgMin.y) * (0.2f + rng(seed) * 0.6f);
-			float sLen = 8.f + rng(seed) * 12.f;
-			float sAngle = (rng(seed) - 0.5f) * 0.6f;
-			dl->AddLine({ sx, sy }, { sx + std::cos(sAngle) * sLen, sy + std::sin(sAngle) * sLen },
-			            IM_COL32(100, 90, 70, 160), 1.5f);
+			for (float qx = pgMin.x + 15.f; qx < pgMax.x - 10.f; qx += qSpacing)
+			{
+				float jx = qx + (rng(seed) - 0.5f) * 10.f;
+				float jy = qy + (rng(seed) - 0.5f) * 10.f;
+				dl->AddText(df, qSize, { jx, jy }, IM_COL32(140, 135, 125, 100), "?");
+			}
 		}
 	}
 }
