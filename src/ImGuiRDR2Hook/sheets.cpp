@@ -482,7 +482,7 @@ namespace Sheets
 		return false;
 	}
 
-	void StartRipPage(const std::string& text, const SheetDrawing& drawing, int page, bool fromJournal, const std::string& bookName, int chapter)
+	void StartRipPage(const std::string& text, const SheetDrawing& drawing, int page, bool fromJournal, const std::string& bookName, int chapter, const std::string& backText, const SheetDrawing& backDrawing)
 	{
 		if (s_ripping || s_ripAnimating || s_showingOverlay) return;
 		s_ripCache.text = text;
@@ -491,9 +491,9 @@ namespace Sheets
 		s_ripCache.fromJournal = fromJournal;
 		s_ripCache.bookName = bookName;
 		s_ripCache.chapter = chapter;
-		s_ripCache.backText = "";
-		s_ripCache.backDrawing = SheetDrawing();
-		s_ripCache.backPage = 0;
+		s_ripCache.backText = backText;
+		s_ripCache.backDrawing = backDrawing;
+		s_ripCache.backPage = GetPartnerPage(page);
 		s_ripping = true;
 		s_ripProgress = 0.f;
 	}

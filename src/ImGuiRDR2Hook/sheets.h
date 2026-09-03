@@ -73,7 +73,7 @@ namespace Sheets
 	int GetNextVisiblePage(int startPage);
 	int GetPartnerPage(int page);
 
-	void StartRipPage(const std::string& text, const SheetDrawing& drawing, int page, bool fromJournal, const std::string& bookName = "", int chapter = 1);
+	void StartRipPage(const std::string& text, const SheetDrawing& drawing, int page, bool fromJournal, const std::string& bookName = "", int chapter = 1, const std::string& backText = "", const SheetDrawing& backDrawing = SheetDrawing());
 	void ConfirmRip();
 	void CancelRip();
 
