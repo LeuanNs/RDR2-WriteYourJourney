@@ -1,5 +1,55 @@
 # Changelog - Write Your Journey
 
+## [Build - Index Crash Fix] - 2026-09-03
+
+### Fix crítico: Crash al usar Index (I + ENTER + seleccionar capítulo)
+
+**Problema:**
+Al presionar I, luego ENTER, y seleccionar un capítulo del Index (ej: Efesios de la Biblia NT), el juego se congelaba y crasheaba.
+
+**Causa raíz:**
+1. `s_currentPage` se calculaba ANTES de `OpenBook()`, pero `OpenBook()` reseteaba `s_currentPage` a 0
+2. `LoadChunk()` no tenía protección try-catch, causando crash en acceso inválido a archivos
+3. La lógica de Enter en Index no tenía manejo de excepciones
+
+**Solución implementada:**
+
+1. **Try-catch en `LoadChunk()`** (custombooks.cpp líneas ~188-215):
+   - Envuelto todo el cuerpo de la función en try-catch
+   - Previene crashes por acceso inválido a archivos o cálculos incorrectos
+   - Si falla, retorna silenciosamente sin corromper estado
+
+2. **Try-catch en handler de Enter** (custombooks.cpp líneas ~1611-1653):
+   - Envuelto cálculo de página y carga de chunk en try-catch
+   - Si falla, llama a `CloseIndex()` para evitar estado inconsistente
+   - Previene freeze del juego
+
+3. **Fix de `s_currentPage`** (custombooks.cpp línea ~1647):
+   - Movido `s_currentPage = targetPage` DESPUÉS de `OpenBook()`
+   - `OpenBook()` reseteaba `s_currentPage` a 0, causando que siempre abriera en página 0
+   - Ahora el orden correcto es: `OpenBook()` → `s_currentPage = targetPage`
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/custombooks.cpp` - Try-catch en LoadChunk y Enter handler, fix de s_currentPage
+
+**Build output:**
+- `WriteYourJourney.asi` compilado exitosamente en `C:\Users\evanm\Desktop\`
+- 0 errores, 1 advertencia (pre-existente: sscanf)
+
+### Checklist de Testing
+
+#### Index - Fix crítico de crash
+- [ ] Abrir satchel (B 3s) → seleccionar libro con Index (ej: Biblia NT 1858)
+- [ ] Presionar I → ¿NO crashea? (debe mostrar hint)
+- [ ] Presionar ENTER → ¿abre Index correctamente sin crash?
+- [ ] Navegar con flechas arriba/abajo → seleccionar capítulo lejano (ej: Efesios)
+- [ ] Presionar ENTER → ¿abre libro en página correcta sin crash?
+- [ ] Lazy loading funciona → texto se renderiza correctamente
+- [ ] ESC en Index → ¿cierra sin bugear?
+- [ ] Repetir con múltiples capítulos → ninguno crashea
+
+---
+
 ## [Build - CustomBooks Backup System] - 2026-09-03
 
 ### Sistema de backup para restauración precisa en CustomBooks
