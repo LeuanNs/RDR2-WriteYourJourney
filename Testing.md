@@ -1,35 +1,31 @@
 # Testing - Write Your Journey - Guia Rapida para Leuan
-> Ultima Build: 2026-09-03 (Testing Fixes Batch 5 - Instant R Pickup, Enhanced Restored Page, [RipSheets] Config)
+> Ultima Build: 2026-09-03 (Testing Fixes Batch 6 - R Key Fix, Restored Page Overlay, Init Fix)
 > Como usar: entra al juego, ve seccion por seccion. Marca [x] si OK, deja [ ] si falla y anota al lado que viste.
 
 ---
 
 ### 0) Hojas Arrancadas (SHEETS) - Journal
 
-#### Pickup instantaneo con R - FIX CRITICO BATCH 5
+#### R key pickup - FIX CRITICO BATCH 6
 **Preparacion:** deja una sheet en el mundo (L en overlay) o ve a una coordenada con sheet conocida
 
 - [ ] Caminar por el mundo sin abrir nada -> acercarse a una sheet -> ¿aparece icono de tecla?
-- [ ] Presionar R UNA VEZ (sin mantener) -> ¿personaje camina inmediatamente hacia la sheet? - FIX: ya no requiere mantener 3s
+- [ ] Presionar R UNA VEZ (sin mantener) -> ¿personaje camina inmediatamente hacia la sheet? - FIX BATCH 6: tracker manual de key state
+- [ ] El pickup funciona desde el primer momento (sin necesidad de abrir journal primero) - FIX BATCH 6: Sheets::Init() al inicio de main()
+- [ ] Sheets de sesiones anteriores se detectan correctamente al iniciar el juego - FIX BATCH 6
 - [ ] Al llegar -> ¿personaje se agacha (crouch animation)?
 - [ ] Al terminar crouch -> ¿hoja se muestra + controles bloqueados?
 - [ ] Moverse mientras personaje camina -> ¿se cancela limpiamente?
-- [ ] Si la animacion de crouch falla -> ¿no se rompe todo? - FIX: try-catch en walk y crouch
 
-#### Pagina restaurada - Visual mejorado - FIX CRITICO BATCH 5
-**Preparacion:** abre el journal (J 3s), escribe algo en pag 2, arranca la pagina (P 3s), presiona ESC en overlay
+#### Pagina restaurada - Visual sobre texto - FIX CRITICO BATCH 6
+**Preparacion:** abre el journal (J), escribe algo en una pagina, arranca la pagina (P 3s), presiona ESC en overlay
 
 - [ ] Rippear pagina del journal -> presionar ESC en overlay -> ¿animacion de hoja volviendo?
-- [ ] Pagina restaurada -> ¿visual CLARAMENTE daniada? - FIX: mejorado significativamente
-  - [ ] Color base mas oscuro (175,165,140) vs paginas normales (210,200,175)
-  - [ ] Lineas de arrugas visibles (14 lineas con opacidad 120)
-  - [ ] Manchas de suciedad visibles (8 manchas con radio 12)
-  - [ ] Bordes rasgados grandes y densos (tearSize * 3)
-  - [ ] Tajos laterales visibles (6 tajos de grosor 2.0)
-  - [ ] Manchas circulares adicionales (4 manchas)
-- [ ] Rippear pagina de custombook -> presionar ESC -> ¿mismo visual mejorado?
+- [ ] Navegar a la pagina restaurada -> ¿se ven las arrugas SOBRE el texto? - FIX BATCH 6: overlay dibujado DESPUES del texto
+- [ ] Las marcas de dano (arrugas, manchas, tajos) son visibles encima del contenido
+- [ ] Rippear pagina de custombook -> presionar ESC -> ¿mismo visual sobre el texto?
 
-#### [RipSheets] Configuracion INI - NUEVO BATCH 5
+#### [RipSheets] Configuracion INI - BATCH 5
 **Preparacion:** editar WriteYourJourney.ini, agregar seccion [RipSheets]
 
 - [ ] Agregar `[RipSheets]` con `enableRipSheetSystem=0` -> recargar (R+P 5s)
@@ -42,12 +38,19 @@
 - [ ] Con tecla F -> presionar F cerca de sheet -> ¿recoge la sheet?
 - [ ] Con tecla F -> presionar R cerca de sheet -> ¿NO pasa nada?
 
+#### PickupMessage eliminado - FIX BATCH 6
+**Preparacion:** dejar una sheet en el mundo (L en overlay)
+
+- [ ] Dejar una sheet en el mundo -> verificar location.ini generado
+- [ ] ¿NO tiene linea PickupMessage? - FIX BATCH 6: eliminado porque es dinamico
+- [ ] Acercarse a la sheet -> ¿mensaje dinamico sigue apareciendo correctamente?
+
 ---
 
 ### 0.5) Index de CustomBooks - FIX CRITICO
 **Preparacion:** abre satchel (B 3s), selecciona un libro con index.json
 
-- [ ] Abrir Index directamente con I desde inventory -> ¿ya no se buguea? - FIX: agregada llamada a OpenBook() despues de CloseIndex()
+- [ ] Abrir Index directamente con I desde inventory -> ¿ya no se buguea?
 - [ ] Presionar Enter en capitulo -> ¿abre libro automaticamente en esa pagina?
 - [ ] ESC en Index -> ¿cierra Index sin problemas?
 
@@ -100,30 +103,23 @@
 
 ---
 
-## Cambios realizados en Batch 5
+## Cambios realizados en Batch 6
 
-### Fix 1: Pickup instantaneo con R
-- Cambiado de "mantener R 3s" a "presionar R una vez"
-- Al presionar R, personaje camina inmediatamente, se agacha y muestra hoja
-- Try-catch en walk y crouch para que si falla la anim no se rompa todo
-- La barra de progreso ya no aparece (ahora es instantaneo)
+### Fix 1: R key no se detectaba
+- Causa: `GetAsyncKeyState('R')` se llamaba al inicio del loop para reload (R+P), consumiendo el bit `0x0001`
+- Solucion: Tracker manual de key state (`s_pickupKeyWasDown`) en vez de `0x0001`
+- `Sheets::Init()` ahora se llama al inicio de `main()`, no solo en `OpenSession()`
+- Discoverables se cargan al iniciar el juego, no solo al abrir journal
 
-### Fix 2: Pagina restaurada visual mejorado
-- Color base mas oscuro: (175,165,140) vs (195,185,160) anterior
-- 14 lineas de arrugas (vs 8), opacidad 120 (vs 80), grosor 1.5 (vs 1.0)
-- 8 manchas de suciedad (vs 5), radio 12 (vs 8), opacidad 90 (vs 60)
-- 5 lineas de pliegues cruzados para efecto de hoja arrugada
-- Bordes rasgados 3x mas grandes y mas densos
-- 6 tajos laterales (vs 3), mas largos y gruesos
-- 4 manchas circulares adicionales
-- La pagina restaurada ahora se ve CLARAMENTE daniada
+### Fix 2: Pagina restaurada se veia perfecta
+- Causa: `DrawRestoredPage()` dibujaba el fondo daniado, pero el texto se renderizaba ENCIMA
+- Solucion: Separado en `DrawRestoredPage()` (fondo) + `DrawRestoredPageDamageOverlay()` (marcas)
+- Overlay de dano se dibuja DESPUES del texto, haciendo marcas visibles
+- Aplicado en journal y custombooks
 
-### Fix 3: [RipSheets] Config INI
-- Nueva seccion [RipSheets] en WriteYourJourney.ini
-- enableRipSheetSystem=1/0 controla todo el sistema
-- ripSheetPickupKey=R (A-Z) configurable
-- Si disabled: no init, no prompt, no rip, no render, no help text
-- Icono de tecla se actualiza automaticamente al cambiar key
+### Fix 3: PickupMessage redundante
+- Eliminado `PickupMessage` de location.ini en `LeaveSheetAtPlayer()`
+- Mensaje es dinamico desde `WJConfig::Sheet_Nearby`
 
 ---
 

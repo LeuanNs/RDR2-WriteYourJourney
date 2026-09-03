@@ -377,6 +377,10 @@ void main()
 	bool s_reloadHolding = false;
 	DWORD s_reloadHoldStart = 0;
 
+	bool s_pickupKeyWasDown = false;
+
+	Sheets::Init();
+
 	while (true)
 	{
 		bool rDown = (SafeGetAsyncKeyState('R') & 0x8000) != 0;
@@ -523,7 +527,9 @@ void main()
 				if (Sheets::IsNearPickup())
 				{
 					int pickupVK = (int)(unsigned char)WJConfig::RipSheetPickupKey;
-					bool keyJustPressed = (SafeGetAsyncKeyState(pickupVK) & 0x0001) != 0;
+					bool keyDown = (SafeGetAsyncKeyState(pickupVK) & 0x8000) != 0;
+					bool keyJustPressed = keyDown && !s_pickupKeyWasDown;
+					s_pickupKeyWasDown = keyDown;
 
 					if (keyJustPressed && !Sheets::IsWalkingToSheet())
 					{

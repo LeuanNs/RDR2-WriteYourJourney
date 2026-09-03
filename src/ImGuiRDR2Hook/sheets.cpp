@@ -687,7 +687,6 @@ namespace Sheets
 				loc << "Y=" << py << "\n";
 				loc << "Z=" << pz << "\n";
 				loc << "PickupRadius=" << PICKUP_RADIUS_DEFAULT << "\n";
-				loc << "PickupMessage=" << WJConfig::Sheet_PressE << "\n";
 				loc << "Author=Player\n";
 				if (s_overlayCache.fromJournal)
 					loc << "Source=Journal\n";

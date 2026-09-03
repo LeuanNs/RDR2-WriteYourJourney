@@ -18,6 +18,7 @@ namespace CustomBooks
 	static void DrawPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float pulse);
 	static void DrawRippedPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float pulse);
 	static void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft);
+	static void DrawRestoredPageDamageOverlay(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft);
 	static void DrawRippedPageSlot(ImDrawList* dl, ImVec2 pgMin, ImVec2 pgMax, bool isLeft);
 
 	static std::vector<std::string> s_availableBooks;
@@ -1062,6 +1063,14 @@ namespace CustomBooks
 			snprintf(pnum, sizeof(pnum), "- %d -", pageIdx + 1);
 			ImVec2 pns = f->CalcTextSizeA(fontSize * 0.8f, FLT_MAX, 0.f, pnum);
 			dl->AddText(f, fontSize * 0.8f, { px + pw * 0.5f - pns.x * 0.5f, py + bookH - margin * 2.f - fontSize }, IM_COL32(150, 140, 130, 200), pnum);
+
+			if (restored)
+			{
+				bool isLeft = (pageIdx % 2 == 0);
+				ImVec2 pgMin{ px, py };
+				ImVec2 pgMax{ px + pw, py + bookH - margin * 2.f };
+				DrawRestoredPageDamageOverlay(dl, pgMin, pgMax, isLeft);
+			}
 		};
 
 		drawPage(leftPage, leftX, by + margin, pageW, leftRipped, leftRestored);
@@ -1780,13 +1789,16 @@ namespace CustomBooks
 
 	static void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft)
 	{
+		dl->AddRectFilled(mn, mx, IM_COL32(175, 165, 140, 255));
+	}
+
+	static void DrawRestoredPageDamageOverlay(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft)
+	{
 		unsigned seed = isLeft ? 3456u : 7890u;
 		auto rng = [](unsigned& s) -> float {
 			s = s * 1664525u + 1013904223u;
 			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
 		};
-
-		dl->AddRectFilled(mn, mx, IM_COL32(175, 165, 140, 255));
 
 		for (int i = 0; i < 14; ++i)
 		{

@@ -42,6 +42,7 @@ namespace
 {
 	void DrawRippedPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, float pulse);
 	void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, bool isLeft);
+	void DrawRestoredPageDamageOverlay(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, bool isLeft);
 
 	// Mitigacion de antivirus: validar ventana activa antes de leer teclado
 	bool GameHasFocus()
@@ -1029,6 +1030,15 @@ namespace
 		};
 
 		dl->AddRectFilled(mn, mx, FadeCol(IM_COL32(175, 165, 140, 255), A));
+	}
+
+	void DrawRestoredPageDamageOverlay(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, bool isLeft)
+	{
+		unsigned seed = isLeft ? 3456u : 7890u;
+		auto rng = [](unsigned& s) -> float {
+			s = s * 1664525u + 1013904223u;
+			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
+		};
 
 		for (int i = 0; i < 14; ++i)
 		{
@@ -2318,6 +2328,17 @@ void CImGuiMenu::Render()
 						DrawDrawingToolsPanel(ds, s_fadeIn);
 					}
 				}
+			}
+		}
+
+		if (s_selectedPage != 0)
+		{
+			bool isLeft = (s_selectedPage % 2 == 1);
+			if (Sheets::IsPageRestored(s_selectedPage, true))
+			{
+				const ImVec2 pmin = PageMin(g, s_selectedPage);
+				const ImVec2 pmax = PageMax(g, s_selectedPage);
+				DrawRestoredPageDamageOverlay(dl, pmin, pmax, s_fadeIn, isLeft);
 			}
 		}
 	}
