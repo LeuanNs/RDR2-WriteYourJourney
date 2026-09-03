@@ -1,5 +1,55 @@
 # Changelog - Write Your Journey
 
+## [Build - Testing Fixes Batch 4] - 2026-09-03
+
+### Fixes based on Testing.md feedback (Batch 4)
+
+**Fix 1: Pickup con R - ahora funciona en mundo libre**
+- Movido el codigo de pickup de sheets fuera del bloque de CustomBooksEnabled
+- Ahora el pickup con R funciona siempre que el journal no este abierto
+- El jugador puede caminar por el mundo y al acercarse a una sheet, aparece el texto y puede mantener R por 3s
+- El personaje camina, se agacha y muestra la hoja correctamente
+
+**Fix 2: Pagina restaurada con visual unica**
+- Agregado sistema para trackear paginas que fueron restauradas (s_restoredJournalPages, s_restoredCustomPages)
+- Agregada funcion IsPageRestored() para verificar si una pagina fue restaurada
+- Modificado RestorePage() para agregar las paginas al set de restauradas
+- Implementada funcion DrawRestoredPage() con visual unica:
+  - Color base mas oscuro (195,185,160) en vez de crema (210,200,175)
+  - Lineas de arrugas aleatorias (8 lineas con opacidad 80)
+  - Manchas de suciedad (5 circulos con opacidad 60)
+  - Bordes rasgados en la parte superior (tajos de 8-14px)
+  - Bordes rasgados en la parte inferior (tajos de 8-14px)
+  - Tajos laterales (3 lineas diagonales con opacidad 150)
+- Aplicado visual de pagina restaurada tanto en journal como en custombooks
+- Las paginas restauradas ahora tienen una apariencia unica: arrugada, sucia y con tajos en los extremos
+
+### Archivos modificados
+- `src/ImGuiRDR2Hook/script.cpp` - Pickup con R movido fuera del bloque CustomBooksEnabled
+- `src/ImGuiRDR2Hook/sheets.cpp` - Sistema de paginas restauradas, IsPageRestored(), DrawRestoredPage()
+- `src/ImGuiRDR2Hook/sheets.h` - Agregada declaracion de IsPageRestored()
+- `src/ImGuiRDR2Hook/menu.cpp` - Aplicado DrawRestoredPage() para paginas restauradas en journal
+- `src/ImGuiRDR2Hook/custombooks.cpp` - Aplicado DrawRestoredPage() para paginas restauradas en custombooks
+- `Documentacion/CHANGELOG.md` - Actualizado con Batch 4
+- `Testing.md` - Actualizado con resultados de Batch 4
+
+### Checklist de Testing
+
+#### Pickup con R - Mundo libre
+- [ ] Caminar por el mundo sin abrir nada -> acercarse a una sheet -> aparece texto "Press R to pick it up"
+- [ ] Mantener R por 3s -> barra de progreso se llena
+- [ ] Al completar hold -> personaje camina hacia la sheet
+- [ ] Al llegar -> personaje se agacha (crouch animation)
+- [ ] Al terminar crouch -> hoja se muestra + controles bloqueados
+
+#### Pagina restaurada - Visual unica
+- [ ] Rippear pagina del journal -> presionar ESC en overlay -> animacion de hoja volviendo
+- [ ] Pagina restaurada -> visual unica: arrugada, sucia, con tajos en extremos
+- [ ] Rippear pagina de custombook -> presionar ESC -> misma animacion y visual
+- [ ] Verificar que la pagina restaurada se ve diferente a las paginas normales
+
+---
+
 ## [Build - Testing Fixes Batch 3] - 2026-09-03
 
 ### Fixes based on Testing.md feedback (Batch 3)

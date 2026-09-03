@@ -53,6 +53,9 @@ namespace Sheets
 
 	static std::unordered_set<int> s_rippedJournalPages;
 	static std::unordered_map<std::string, std::unordered_set<int>> s_rippedCustomPages;
+	
+	static std::unordered_set<int> s_restoredJournalPages;
+	static std::unordered_map<std::string, std::unordered_set<int>> s_restoredCustomPages;
 
 	static std::vector<DiscoverableSheet> s_discoverableSheets;
 	static int s_nearbySheetId = -1;
@@ -347,6 +350,15 @@ namespace Sheets
 		return it->second.count(page) > 0;
 	}
 
+	bool IsPageRestored(int page, bool isJournal, const std::string& bookName)
+	{
+		if (isJournal)
+			return s_restoredJournalPages.count(page) > 0;
+		auto it = s_restoredCustomPages.find(bookName);
+		if (it == s_restoredCustomPages.end()) return false;
+		return it->second.count(page) > 0;
+	}
+
 	int GetNextVisiblePage(int startPage)
 	{
 		for (int p = startPage; p < startPage + 20; ++p)
@@ -560,6 +572,8 @@ namespace Sheets
 		{
 			s_rippedJournalPages.erase(page);
 			if (partner > 0) s_rippedJournalPages.erase(partner);
+			s_restoredJournalPages.insert(page);
+			if (partner > 0) s_restoredJournalPages.insert(partner);
 		}
 		else
 		{
@@ -569,6 +583,8 @@ namespace Sheets
 				it->second.erase(page);
 				if (partner > 0) it->second.erase(partner);
 			}
+			s_restoredCustomPages[s_overlayCache.bookName].insert(page);
+			if (partner > 0) s_restoredCustomPages[s_overlayCache.bookName].insert(partner);
 			CustomBooks::RestorePage(s_overlayCache.bookName, page);
 		}
 
