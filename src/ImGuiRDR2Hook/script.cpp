@@ -496,18 +496,23 @@ void main()
 			continue;
 		}
 
-		if (WJConfig::CustomBooksEnabled && !s_active && PlayerCanUseJournal())
+		if (!s_active && PlayerCanUseJournal())
 		{
 			const Ped ped = PlayerPed();
 			const Vector3 pos = ENTITY::GET_ENTITY_COORDS(ped, TRUE, TRUE);
-			CustomBooks::UpdatePickupPrompt(pos.x, pos.y, pos.z);
+			
+			if (WJConfig::CustomBooksEnabled)
+			{
+				CustomBooks::UpdatePickupPrompt(pos.x, pos.y, pos.z);
+				
+				if (CustomBooks::IsNearPickup() && (SafeGetAsyncKeyState('E') & 0x0001) != 0)
+				{
+					CustomBooks::TryPickupBook(pos.x, pos.y, pos.z);
+				}
+			}
+			
 			Sheets::SetPlayerCoords(pos.x, pos.y, pos.z);
 			Sheets::UpdatePickupPrompt(pos.x, pos.y, pos.z);
-
-			if (CustomBooks::IsNearPickup() && (SafeGetAsyncKeyState('E') & 0x0001) != 0)
-			{
-				CustomBooks::TryPickupBook(pos.x, pos.y, pos.z);
-			}
 
 			if (Sheets::IsNearPickup())
 			{

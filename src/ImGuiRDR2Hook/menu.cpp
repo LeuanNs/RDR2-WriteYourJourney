@@ -41,6 +41,7 @@ std::string CImGuiMenu::s_journalTitle = "Arthur's Journey";
 namespace
 {
 	void DrawRippedPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, float pulse);
+	void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, bool isLeft);
 
 	// Mitigacion de antivirus: validar ventana activa antes de leer teclado
 	bool GameHasFocus()
@@ -754,12 +755,18 @@ namespace
 		// Paginas crema / pergamino
 		bool leftRipped = Sheets::IsPageRipped(s_pagePair, true);
 		bool rightRipped = Sheets::IsPageRipped(s_pagePair + 1, true);
+		bool leftRestored = Sheets::IsPageRestored(s_pagePair, true);
+		bool rightRestored = Sheets::IsPageRestored(s_pagePair + 1, true);
 
 		if (leftRipped)
 		{
 			DrawRippedPageSlot(dl, g.leftMin, g.leftMax, A, true);
 			const float pulse = 0.5f + 0.5f * std::sin((float)ImGui::GetTime() * 4.0f);
 			DrawRippedPageGlow(dl, g.leftMin, g.leftMax, A, pulse);
+		}
+		else if (leftRestored)
+		{
+			DrawRestoredPage(dl, g.leftMin, g.leftMax, A, true);
 		}
 		else
 			dl->AddRectFilled(g.leftMin, g.leftMax, FadeCol(IM_COL32(210, 200, 175, 255), A));
@@ -769,6 +776,10 @@ namespace
 			DrawRippedPageSlot(dl, g.rightMin, g.rightMax, A, false);
 			const float pulse = 0.5f + 0.5f * std::sin((float)ImGui::GetTime() * 4.0f);
 			DrawRippedPageGlow(dl, g.rightMin, g.rightMax, A, pulse);
+		}
+		else if (rightRestored)
+		{
+			DrawRestoredPage(dl, g.rightMin, g.rightMax, A, false);
 		}
 		else
 			dl->AddRectFilled(g.rightMin, g.rightMax, FadeCol(IM_COL32(205, 195, 168, 255), A));
@@ -1003,6 +1014,93 @@ namespace
 		            IM_COL32(50, 200, 255, std::clamp(alpha1, 0, 255)), 4.f, 0, 4.f);
 		dl->AddRect({ mn.x - 1.f, mn.y - 1.f }, { mx.x + 1.f, mx.y + 1.f },
 		            IM_COL32(100, 220, 255, std::clamp(alpha1, 0, 255)), 3.f, 0, 2.5f);
+	}
+
+	void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float A, bool isLeft)
+	{
+		unsigned seed = isLeft ? 3456u : 7890u;
+		auto rng = [](unsigned& s) -> float {
+			s = s * 1664525u + 1013904223u;
+			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
+		};
+
+		dl->AddRectFilled(mn, mx, FadeCol(IM_COL32(195, 185, 160, 255), A));
+
+		for (int i = 0; i < 8; ++i)
+		{
+			float y1 = mn.y + (mx.y - mn.y) * rng(seed);
+			float y2 = y1 + (rng(seed) - 0.5f) * 20.f;
+			float x1 = mn.x + rng(seed) * (mx.x - mn.x) * 0.3f;
+			float x2 = x1 + (mx.x - mn.x) * (0.4f + rng(seed) * 0.4f);
+			dl->AddLine({ x1, y1 }, { x2, y2 }, FadeCol(IM_COL32(160, 150, 130, 80), A), 1.f);
+		}
+
+		for (int i = 0; i < 5; ++i)
+		{
+			float cx = mn.x + rng(seed) * (mx.x - mn.x);
+			float cy = mn.y + rng(seed) * (mx.y - mn.y);
+			float r = 3.f + rng(seed) * 8.f;
+			dl->AddCircleFilled({ cx, cy }, r, FadeCol(IM_COL32(140, 130, 110, 60), A), 8);
+		}
+
+		float tearSize = 8.f + rng(seed) * 6.f;
+		std::vector<ImVec2> topTear;
+		if (isLeft)
+		{
+			topTear.push_back({ mx.x, mn.y });
+			for (float x = mx.x; x > mx.x - tearSize * 2.f; x -= 3.f)
+			{
+				float jy = mn.y + (rng(seed) - 0.3f) * tearSize;
+				topTear.push_back({ x, jy });
+			}
+			topTear.push_back({ mx.x - tearSize * 2.f, mn.y });
+		}
+		else
+		{
+			topTear.push_back({ mn.x, mn.y });
+			for (float x = mn.x; x < mn.x + tearSize * 2.f; x += 3.f)
+			{
+				float jy = mn.y + (rng(seed) - 0.3f) * tearSize;
+				topTear.push_back({ x, jy });
+			}
+			topTear.push_back({ mn.x + tearSize * 2.f, mn.y });
+		}
+		if (topTear.size() >= 3)
+			dl->AddConvexPolyFilled(topTear.data(), (int)topTear.size(), FadeCol(IM_COL32(180, 170, 145, 200), A));
+
+		std::vector<ImVec2> bottomTear;
+		if (isLeft)
+		{
+			bottomTear.push_back({ mx.x, mx.y });
+			for (float x = mx.x; x > mx.x - tearSize * 1.5f; x -= 3.f)
+			{
+				float jy = mx.y - (rng(seed) - 0.3f) * tearSize;
+				bottomTear.push_back({ x, jy });
+			}
+			bottomTear.push_back({ mx.x - tearSize * 1.5f, mx.y });
+		}
+		else
+		{
+			bottomTear.push_back({ mn.x, mx.y });
+			for (float x = mn.x; x < mn.x + tearSize * 1.5f; x += 3.f)
+			{
+				float jy = mx.y - (rng(seed) - 0.3f) * tearSize;
+				bottomTear.push_back({ x, jy });
+			}
+			bottomTear.push_back({ mn.x + tearSize * 1.5f, mx.y });
+		}
+		if (bottomTear.size() >= 3)
+			dl->AddConvexPolyFilled(bottomTear.data(), (int)bottomTear.size(), FadeCol(IM_COL32(180, 170, 145, 200), A));
+
+		for (int i = 0; i < 3; ++i)
+		{
+			float sx = isLeft ? (mx.x - 5.f - rng(seed) * 15.f) : (mn.x + 5.f + rng(seed) * 15.f);
+			float sy = mn.y + (mx.y - mn.y) * (0.2f + rng(seed) * 0.6f);
+			float sLen = 5.f + rng(seed) * 10.f;
+			float sAngle = (rng(seed) - 0.5f) * 0.5f;
+			dl->AddLine({ sx, sy }, { sx + std::cos(sAngle) * sLen, sy + std::sin(sAngle) * sLen },
+			            FadeCol(IM_COL32(120, 110, 90, 150), A), 1.5f);
+		}
 	}
 
 	void DrawPageOverviewGlow(ImDrawList* dl, const BookGeom& g, float A)

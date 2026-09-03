@@ -17,6 +17,7 @@ namespace CustomBooks
 	static std::vector<std::string> WrapText(const std::string& text, float maxWidth, ImFont* f, float fontSize);
 	static void DrawPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float pulse);
 	static void DrawRippedPageGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float pulse);
+	static void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft);
 	static void DrawRippedPageSlot(ImDrawList* dl, ImVec2 pgMin, ImVec2 pgMax, bool isLeft);
 
 	static std::vector<std::string> s_availableBooks;
@@ -951,6 +952,8 @@ namespace CustomBooks
 
 		bool leftRipped = IsPageRipped(s_currentBook, leftPage);
 		bool rightRipped = IsPageRipped(s_currentBook, rightPage);
+		bool leftRestored = Sheets::IsPageRestored(leftPage, false, s_currentBook);
+		bool rightRestored = Sheets::IsPageRestored(rightPage, false, s_currentBook);
 
 		float leftX = bx + margin;
 		float rightX = bx + bookW * 0.5f + margin * 0.5f;
@@ -960,7 +963,7 @@ namespace CustomBooks
 		ImVec2 rightMin{ rightX, by + margin };
 		ImVec2 rightMax{ rightX + pageW, by + bookH - margin };
 
-		auto drawPage = [&](int pageIdx, float px, float py, float pw, bool ripped)
+		auto drawPage = [&](int pageIdx, float px, float py, float pw, bool ripped, bool restored)
 		{
 			if (ripped)
 			{
@@ -975,6 +978,14 @@ namespace CustomBooks
 					{ px + pw * 0.5f - msz.x * 0.5f, py + (bookH - margin * 2.f) * 0.5f - msz.y * 0.5f },
 					IM_COL32(76, 62, 48, 200), msg);
 				return;
+			}
+
+			if (restored)
+			{
+				bool isLeft = (pageIdx % 2 == 0);
+				ImVec2 pgMin{ px, py };
+				ImVec2 pgMax{ px + pw, py + bookH - margin * 2.f };
+				DrawRestoredPage(dl, pgMin, pgMax, isLeft);
 			}
 
 			int startLine = pageIdx * linesPerPage - book.lazyStartLine;
@@ -1053,9 +1064,9 @@ namespace CustomBooks
 			dl->AddText(f, fontSize * 0.8f, { px + pw * 0.5f - pns.x * 0.5f, py + bookH - margin * 2.f - fontSize }, IM_COL32(150, 140, 130, 200), pnum);
 		};
 
-		drawPage(leftPage, leftX, by + margin, pageW, leftRipped);
+		drawPage(leftPage, leftX, by + margin, pageW, leftRipped, leftRestored);
 		if (rightPage < totalWrappedPages)
-			drawPage(rightPage, rightX, by + margin, pageW, rightRipped);
+			drawPage(rightPage, rightX, by + margin, pageW, rightRipped, rightRestored);
 
 		{
 			const float pulse = 0.5f + 0.5f * std::sin((float)ImGui::GetTime() * 4.0f);
@@ -1762,6 +1773,93 @@ namespace CustomBooks
 		            IM_COL32(50, 200, 255, std::clamp(alpha1, 0, 255)), 4.f, 0, 4.f);
 		dl->AddRect({ mn.x - 1.f, mn.y - 1.f }, { mx.x + 1.f, mx.y + 1.f },
 		            IM_COL32(100, 220, 255, std::clamp(alpha1, 0, 255)), 3.f, 0, 2.5f);
+	}
+
+	static void DrawRestoredPage(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool isLeft)
+	{
+		unsigned seed = isLeft ? 3456u : 7890u;
+		auto rng = [](unsigned& s) -> float {
+			s = s * 1664525u + 1013904223u;
+			return (float)((s >> 8) & 0xFFFFFF) / (float)0xFFFFFF;
+		};
+
+		dl->AddRectFilled(mn, mx, IM_COL32(195, 185, 160, 255));
+
+		for (int i = 0; i < 8; ++i)
+		{
+			float y1 = mn.y + (mx.y - mn.y) * rng(seed);
+			float y2 = y1 + (rng(seed) - 0.5f) * 20.f;
+			float x1 = mn.x + rng(seed) * (mx.x - mn.x) * 0.3f;
+			float x2 = x1 + (mx.x - mn.x) * (0.4f + rng(seed) * 0.4f);
+			dl->AddLine({ x1, y1 }, { x2, y2 }, IM_COL32(160, 150, 130, 80), 1.f);
+		}
+
+		for (int i = 0; i < 5; ++i)
+		{
+			float cx = mn.x + rng(seed) * (mx.x - mn.x);
+			float cy = mn.y + rng(seed) * (mx.y - mn.y);
+			float r = 3.f + rng(seed) * 8.f;
+			dl->AddCircleFilled({ cx, cy }, r, IM_COL32(140, 130, 110, 60), 8);
+		}
+
+		float tearSize = 8.f + rng(seed) * 6.f;
+		std::vector<ImVec2> topTear;
+		if (isLeft)
+		{
+			topTear.push_back({ mx.x, mn.y });
+			for (float x = mx.x; x > mx.x - tearSize * 2.f; x -= 3.f)
+			{
+				float jy = mn.y + (rng(seed) - 0.3f) * tearSize;
+				topTear.push_back({ x, jy });
+			}
+			topTear.push_back({ mx.x - tearSize * 2.f, mn.y });
+		}
+		else
+		{
+			topTear.push_back({ mn.x, mn.y });
+			for (float x = mn.x; x < mn.x + tearSize * 2.f; x += 3.f)
+			{
+				float jy = mn.y + (rng(seed) - 0.3f) * tearSize;
+				topTear.push_back({ x, jy });
+			}
+			topTear.push_back({ mn.x + tearSize * 2.f, mn.y });
+		}
+		if (topTear.size() >= 3)
+			dl->AddConvexPolyFilled(topTear.data(), (int)topTear.size(), IM_COL32(180, 170, 145, 200));
+
+		std::vector<ImVec2> bottomTear;
+		if (isLeft)
+		{
+			bottomTear.push_back({ mx.x, mx.y });
+			for (float x = mx.x; x > mx.x - tearSize * 1.5f; x -= 3.f)
+			{
+				float jy = mx.y - (rng(seed) - 0.3f) * tearSize;
+				bottomTear.push_back({ x, jy });
+			}
+			bottomTear.push_back({ mx.x - tearSize * 1.5f, mx.y });
+		}
+		else
+		{
+			bottomTear.push_back({ mn.x, mx.y });
+			for (float x = mn.x; x < mn.x + tearSize * 1.5f; x += 3.f)
+			{
+				float jy = mx.y - (rng(seed) - 0.3f) * tearSize;
+				bottomTear.push_back({ x, jy });
+			}
+			bottomTear.push_back({ mn.x + tearSize * 1.5f, mx.y });
+		}
+		if (bottomTear.size() >= 3)
+			dl->AddConvexPolyFilled(bottomTear.data(), (int)bottomTear.size(), IM_COL32(180, 170, 145, 200));
+
+		for (int i = 0; i < 3; ++i)
+		{
+			float sx = isLeft ? (mx.x - 5.f - rng(seed) * 15.f) : (mn.x + 5.f + rng(seed) * 15.f);
+			float sy = mn.y + (mx.y - mn.y) * (0.2f + rng(seed) * 0.6f);
+			float sLen = 5.f + rng(seed) * 10.f;
+			float sAngle = (rng(seed) - 0.5f) * 0.5f;
+			dl->AddLine({ sx, sy }, { sx + std::cos(sAngle) * sLen, sy + std::sin(sAngle) * sLen },
+			            IM_COL32(120, 110, 90, 150), 1.5f);
+		}
 	}
 
 	static void DrawRippedPageSlot(ImDrawList* dl, ImVec2 pgMin, ImVec2 pgMax, bool isLeft)
