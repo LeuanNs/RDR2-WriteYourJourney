@@ -23,6 +23,8 @@ namespace WJConfig
 	inline char CustomBooksKey = 'B';
 	inline bool RipSheetsEnabled = true;
 	inline char RipSheetPickupKey = 'R';
+	inline bool LettersEnabled = true;
+	inline char LettersInteractKey = 'E';
 
 	inline constexpr const char* FB_Help_Cover    = "ENTER: Open journal   |   Hold ESC 5s: Save and close";
 	inline constexpr const char* FB_Help_Overview = "Arrows: Focus page (2nd time: turn page)   |   ENTER: Select   |   Hold ESC 5s: Close";
@@ -51,7 +53,8 @@ namespace WJConfig
 	inline constexpr const char* FB_BookmarkRemoved    = "Bookmark Removed";
 	inline constexpr const char* FB_Sheet_RipHint      = "P: Rip Page";
 	inline constexpr const char* FB_Sheet_RippingProgress = "Ripping page...";
-	inline constexpr const char* FB_Sheet_LeaveHint    = "L: Leave Page here";
+	inline constexpr const char* FB_Sheet_LeaveHint    = "D: Leave here";
+	inline constexpr const char* FB_Sheet_SaveAsLetter  = "L: Save as Letter";
 	inline constexpr const char* FB_Sheet_ReadHint     = "R: Read";
 	inline constexpr const char* FB_Sheet_RestoreHint  = "Add page back";
 	inline constexpr const char* FB_Sheet_CloseHint    = "Close";
@@ -61,6 +64,18 @@ namespace WJConfig
 	inline constexpr const char* FB_Sheet_PageRipped = "Page Ripped";
 	inline constexpr const char* FB_Sheet_KeepSheet = "K: Keep the Sheet";
 	inline constexpr const char* FB_Sheet_LookBehind = "R: Look Behind";
+
+	inline constexpr const char* FB_Letters_EnvelopeFrom = "From:";
+	inline constexpr const char* FB_Letters_EnvelopeTo = "To:";
+	inline constexpr const char* FB_Letters_EnvelopeHint = "W: Write | D: Draw";
+	inline constexpr const char* FB_Letters_SaveLetter = "S: Save Letter";
+	inline constexpr const char* FB_Letters_InboxTitle = "Letter Inbox";
+	inline constexpr const char* FB_Letters_NavHint = "<- -> : Browse | ENTER: Open | TAB: Sent/Received | ESC: Close";
+	inline constexpr const char* FB_Letters_ReadHint = "R: Read again | DEL: Delete | ESC: Close";
+	inline constexpr const char* FB_Letters_WriteHint = "Write your note... (ESC: Done)";
+	inline constexpr const char* FB_Letters_DrawHint = "Draw signature (E: Eraser | Z/X: Size | ESC: Done)";
+	inline constexpr const char* FB_Letters_NearPostbox = "Post Office nearby";
+	inline constexpr const char* FB_Letters_PressInteract = "Press E to send letters";
 
 	inline std::string Help_Cover;
 	inline std::string Help_Overview;
@@ -90,6 +105,7 @@ namespace WJConfig
 	inline std::string Sheet_RipHint;
 	inline std::string RippingProgress;
 	inline std::string Sheet_LeaveHint;
+	inline std::string Sheet_SaveAsLetter;
 	inline std::string Sheet_ReadHint;
 	inline std::string Sheet_RestoreHint;
 	inline std::string Sheet_CloseHint;
@@ -99,6 +115,18 @@ namespace WJConfig
 	inline std::string Sheet_PageRipped;
 	inline std::string Sheet_KeepSheet;
 	inline std::string Sheet_LookBehind;
+
+	inline std::string Letters_EnvelopeFrom;
+	inline std::string Letters_EnvelopeTo;
+	inline std::string Letters_EnvelopeHint;
+	inline std::string Letters_SaveLetter;
+	inline std::string Letters_InboxTitle;
+	inline std::string Letters_NavHint;
+	inline std::string Letters_ReadHint;
+	inline std::string Letters_WriteHint;
+	inline std::string Letters_DrawHint;
+	inline std::string Letters_NearPostbox;
+	inline std::string Letters_PressInteract;
 
 	inline std::string GetModuleDir()
 	{
@@ -193,6 +221,15 @@ namespace WJConfig
 		else if (buf[0] >= 'A' && buf[0] <= 'Z')
 			RipSheetPickupKey = buf[0];
 
+		GetPrivateProfileStringA("Letters", "Enabled", "1", buf, sizeof(buf), iniPath.c_str());
+		LettersEnabled = (std::atoi(buf) != 0);
+
+		GetPrivateProfileStringA("Letters", "InteractKey", "E", buf, sizeof(buf), iniPath.c_str());
+		if (buf[0] >= 'a' && buf[0] <= 'z')
+			LettersInteractKey = (char)(buf[0] - 32);
+		else if (buf[0] >= 'A' && buf[0] <= 'Z')
+			LettersInteractKey = buf[0];
+
 		auto loadStr = [&](const char* key, const char* fallback, std::string& out) {
 			GetPrivateProfileStringA("Localization", key, fallback, buf, sizeof(buf), iniPath.c_str());
 			out = buf;
@@ -227,6 +264,7 @@ namespace WJConfig
 		loadStr("Sheet_RipHint",       FB_Sheet_RipHint,       Sheet_RipHint);
 		loadStr("RippingProgress",     FB_Sheet_RippingProgress, RippingProgress);
 		loadStr("Sheet_LeaveHint",     FB_Sheet_LeaveHint,     Sheet_LeaveHint);
+		loadStr("Sheet_SaveAsLetter",  FB_Sheet_SaveAsLetter,  Sheet_SaveAsLetter);
 		loadStr("Sheet_ReadHint",      FB_Sheet_ReadHint,      Sheet_ReadHint);
 		loadStr("Sheet_RestoreHint",   FB_Sheet_RestoreHint,   Sheet_RestoreHint);
 		loadStr("Sheet_CloseHint",     FB_Sheet_CloseHint,     Sheet_CloseHint);
@@ -236,6 +274,18 @@ namespace WJConfig
 		loadStr("Sheet_PageRipped", FB_Sheet_PageRipped, Sheet_PageRipped);
 		loadStr("Sheet_KeepSheet", FB_Sheet_KeepSheet, Sheet_KeepSheet);
 		loadStr("Sheet_LookBehind", FB_Sheet_LookBehind, Sheet_LookBehind);
+
+		loadStr("Letters_EnvelopeFrom", FB_Letters_EnvelopeFrom, Letters_EnvelopeFrom);
+		loadStr("Letters_EnvelopeTo", FB_Letters_EnvelopeTo, Letters_EnvelopeTo);
+		loadStr("Letters_EnvelopeHint", FB_Letters_EnvelopeHint, Letters_EnvelopeHint);
+		loadStr("Letters_SaveLetter", FB_Letters_SaveLetter, Letters_SaveLetter);
+		loadStr("Letters_InboxTitle", FB_Letters_InboxTitle, Letters_InboxTitle);
+		loadStr("Letters_NavHint", FB_Letters_NavHint, Letters_NavHint);
+		loadStr("Letters_ReadHint", FB_Letters_ReadHint, Letters_ReadHint);
+		loadStr("Letters_WriteHint", FB_Letters_WriteHint, Letters_WriteHint);
+		loadStr("Letters_DrawHint", FB_Letters_DrawHint, Letters_DrawHint);
+		loadStr("Letters_NearPostbox", FB_Letters_NearPostbox, Letters_NearPostbox);
+		loadStr("Letters_PressInteract", FB_Letters_PressInteract, Letters_PressInteract);
 
 		BlessingValid = ValidateBlessing();
 	}

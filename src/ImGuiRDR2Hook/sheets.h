@@ -122,4 +122,15 @@ namespace Sheets
 
 	bool WasSheetViewed();
 	void SetSheetViewed(bool v);
+
+	void StartLetterFlow();
+	bool IsLetterFlowActive();
+	int GetLetterFlowState();
+	void SetLetterFlowState(int st);
+	float GetLetterFoldAnimT();
+	float GetLetterInsertAnimT();
+	void SetLetterFoldAnimT(float t);
+	void SetLetterInsertAnimT(float t);
+	void StopLetterFlow();
+	const RippedSheetCache& GetOverlayCache();
 }

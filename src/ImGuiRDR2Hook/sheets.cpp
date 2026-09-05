@@ -84,6 +84,13 @@ namespace Sheets
 
 	static std::mutex s_sheetsMutex;
 
+	static bool s_letterFlowActive = false;
+	static int s_letterFlowState = 0;
+	static float s_letterFoldAnimT = 0.f;
+	static float s_letterInsertAnimT = 0.f;
+	static constexpr float FOLD_ANIM_DURATION = 0.9f;
+	static constexpr float INSERT_ANIM_DURATION = 0.6f;
+
 	static fs::path GetDiscoverablesDir()
 	{
 		return fs::path(WJConfig::GetModuleDir()) / "myjourney" / "Discoverables";
@@ -1051,10 +1058,17 @@ namespace Sheets
 					RestorePage();
 				}
 			}
-			else if (ImGui::IsKeyPressed(ImGuiKey_L, false))
+			else if (ImGui::IsKeyPressed(ImGuiKey_D, false))
 			{
 				if (!s_viewingDiscoverable)
 					LeaveSheetAtPlayer();
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_L, false))
+			{
+				if (!s_viewingDiscoverable)
+				{
+					StartLetterFlow();
+				}
 			}
 			else if (ImGui::IsKeyPressed(ImGuiKey_R, false))
 			{
@@ -1320,6 +1334,7 @@ namespace Sheets
 		else
 		{
 			helpStr = WJConfig::Sheet_LeaveHint;
+			helpStr += "   |   " + WJConfig::Sheet_SaveAsLetter;
 			bool hasBack = showBack ?
 				(!s_overlayCache.text.empty() || !s_overlayCache.drawing.lines.empty()) :
 				(!s_overlayCache.backText.empty() || !s_overlayCache.backDrawing.lines.empty());
@@ -1453,6 +1468,36 @@ namespace Sheets
 			}
 		}
 	}
+
+	void StartLetterFlow()
+	{
+		if (!s_showingOverlay || s_viewingDiscoverable) return;
+		s_letterFlowActive = true;
+		s_letterFlowState = 1;
+		s_letterFoldAnimT = 0.f;
+		s_letterInsertAnimT = 0.f;
+	}
+
+	bool IsLetterFlowActive() { return s_letterFlowActive; }
+	int GetLetterFlowState() { return s_letterFlowState; }
+	void SetLetterFlowState(int st) { s_letterFlowState = st; }
+	float GetLetterFoldAnimT() { return s_letterFoldAnimT; }
+	float GetLetterInsertAnimT() { return s_letterInsertAnimT; }
+	void SetLetterFoldAnimT(float t) { s_letterFoldAnimT = t; }
+	void SetLetterInsertAnimT(float t) { s_letterInsertAnimT = t; }
+	void StopLetterFlow()
+	{
+		s_letterFlowActive = false;
+		s_letterFlowState = 0;
+		s_letterFoldAnimT = 0.f;
+		s_letterInsertAnimT = 0.f;
+		s_showingOverlay = false;
+		s_overlayCache = RippedSheetCache();
+		s_showingBack = false;
+		s_flipAnimating = false;
+	}
+
+	const RippedSheetCache& GetOverlayCache() { return s_overlayCache; }
 
 	void Render()
 	{
