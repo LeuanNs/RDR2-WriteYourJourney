@@ -1,0 +1,37 @@
+Flujo completo por estados — versión hardcodeada
+Estado 1 — Rip overlay actual en sheets.cpp:1228
+- Cambia sheets.cpp:510 L: Leave por D: Leave here como pides. Mantén ESC: Devolver y añade L: Save as Letter. Es solo texto de WJConfig en config.h, no rompe input. D queda libre porque hoy D es modo dibujo solo dentro de menu.cpp journal, no en overlay de sheets, no hay colisión.
+- Si D -> flujo actual LeaveSheetAtPlayer en sheets.cpp:854 sin cambios, crea myjourney/Discoverables/SHEET<N> y cierra overlay.
+- Si ESC -> RestorePage en sheets.cpp:677 actual.
+- Si L -> entra a Estado 2 y NO cierra el rip cache, lo conserva en memoria s_overlayCache para no perder text/drawing/back.
+Estado 2 — Anim hoja doblándose + sobre — nuevo en Sheets
+- Anim 1 — fold a la mitad: reutiliza lógica de sheets.cpp:1228 flip con cos(t*PI) pero con scaleY 1.0 -> 0.5 + línea central oscura para pliegue. Duración 0.9s como RIP_ANIM_DURATION en sheets.cpp:22.
+- Anim 2 — insert en sobre: rectángulo sobre IM_COL32(210,200,175) con solapa triangular, hoja hace lerp hacia centro del sobre con alpha 1->0 y rotación leve. 0.6s. Al terminar queda solo el sobre centrado.
+- Todo dibujado con ImDrawList en GetForegroundDrawList como DrawRippedPageOverlay, sin texturas. Reusa Rng/FadeCol de sheets.cpp:1101.
+Estado 3 — Escritura sobre el sobre — nuevo overlay de envelope
+- Sobre queda fijo w 0.5*DisplaySize.x con dos InputText invisibles centrados arriba: From: y To: con hint Escribe nombre.... Reusa InputTextMultiline invisible de menu.cpp modo Write, pero solo 1 línea cada uno, con ImGui::InputText y foco con click. Permite escribir lo que quiera como pides, no valida contra lista de personajes.
+- Debajo del sobre muestra hints W: Write | D: Draw como en menu.cpp Help_Draw/Help_Write. W activa teclado virtual ImGui sobre área de carta para nota corta opcional, D activa canvas de trazos normalizado 0..1 igual que menu.cpp Draw con E goma Z/X radio. Sirve para firma/dibujo random que mencionas. Se guarda en SheetDrawing del envelope no del sheet original, separado.
+- Cuando ambos campos From/To tienen al menos 1 char, habilita hint S: Save Letter en la ayuda inferior. S no colisiona en este overlay porque solo está activo aquí.
+Estado 4 — Save Letter -> inventario owned
+- S: Save Letter copia s_overlayCache.text/drawing + envelope From/To + envelope Drawing a myjourney/Letters/Sent/LETTER<N>/ con letter.txt, letter_draw.dat, envelope.ini {from, to, date, originalPage, bookName}, envelope_draw.dat. Marca el rip como consumido: mismo IncrementPageDamage y SaveRippedPagesIndex de sheets.cpp:627 y limpia s_showingOverlay. No crea Discoverable, crea Letter owned. Estado final carta lista para enviar queda en s_sentLetters en memoria.
+- Desde aquí el flow de sheets termina. La carta no vuelve al mundo como sheet, va al inbox.
+Estado 5 — Entrega al cartero — polling en script.cpp:374
+- En script.cpp:509 loop sin journal, añade check Letters::UpdatePostmanPrompt que reutiliza Sheets::SetPlayerCoords con s_playerX/Y/Z atómicos. Usa coords fijas de oficinas postales (Valentine, Rhodes, Saint Denis) + check PED::GET_ENTITY_MODEL del ped cercano <3m contra lista de 2 hashes de postman que sacas con Rampage. Si cerca muestra prompt con tecla de interacción a crear en config.h [Letters] InteractKey=E con icono DrawKeyIcon de sheets.cpp:1489.
+- Al presionar E abre Estado 6. Bloquea controles como CustomBooks::IsInventoryOpen en script.cpp:410 con LockControlsThisFrame.
+Estado 6 — Inbox de cartas — UI tipo CustomBooks inventory
+- Nuevo letters.cpp/h aislado que expone IsInboxOpen, HandleInput, RenderInbox. En menu.cpp:Render entra con prioridad justo después de Sheets::HandleInput y antes de CustomBooks, con check if Letters::IsInboxOpen() {RenderInbox(); return;} igual que CustomBooks::IsInventoryOpen en menu.cpp:326.
+- RenderInbox es carousel horizontal como custombooks.cpp inventory pero con covers de sobres: IM_COL32(220,210,180) con sello rojo IM_COL32(180,40,30) y texto To: X From: Y. Flechas <- -> navegan, ENTER abre carta, ESC cierra inbox y devuelve control. Lista filtra Sent y Received en dos filas o pestañas con TAB, simple.
+- Scan al Init en script.cpp:382 lee myjourney/Letters/Sent y Received a vectores s_sentLetters / s_receivedLetters con fs::directory_iterator como sheets.cpp:318.
+Estado 7 — Lectura de carta — overlay de carta abierta
+- ENTER sobre sobre hace anim de apertura: solapa gira con sin(t*PI) 0.6s y hoja sale hacia arriba con lerp igual que DrawRipAnimation en sheets.cpp:1373. Luego muestra contenido original de la sheet arrancada letter.txt + letter_draw.dat escalado con DrawSheetContent de sheets.cpp:1149 dentro del rect del sobre abierto. Solo lectura, sin edición.
+- Una vez leída queda en owned en Letters/Sent y también marca Found interno para que inbox la siga listando. Al abrir inbox de nuevo la única interacción es R: Leer de nuevo / DEL: Borrar como pides. Borrar hace fs::remove_all del LETTER<N> y rescan. No hay más estados.
+Cosas por hacer — checklist para Qwen cuando implemente
+1. Renombrar hint L: Leave a D: Leave here en config.h y sheets.cpp:1330, añadir L: Save as Letter con gate LettersEnabled.
+2. Crear letters.h/cpp aislado con structs Letter {id, from, to, text, drawing, envelopeDrawing, sent, received} y API Init/UpdatePostmanPrompt/IsInboxOpen/HandleInput/RenderInbox/TrySaveLetterFromOverlay.
+3. Extender sheets.cpp Estado 2-4: nueva rama L que guarda s_overlayCache y lanza fold+envelope anims, luego overlay de inputs From/To + W/D + S. Reusa SheetDrawing para firma.
+4. Crear persistencia myjourney/Letters/ con Sent y Received, funciones SaveLetter / ScanLetters con std::filesystem y atomic para coords como sheets.cpp:29.
+5. Añadir polling cartero en script.cpp:509 con GetEntityCoords + GET_ENTITY_MODEL + VDist <5m, y bloqueo de controles + Win32.cpp forward como hace CustomBooks en Hook/Win32.cpp:27.
+6. Implementar RenderInbox en letters.cpp con ImDrawList sobres, navegación flechas/ENTER/ESC, y overlay de lectura con contenido escalado.
+7. Integrar en menu.cpp:Render con prioridad Sheets > Letters Inbox > CustomBooks > Journal y en script.cpp con if Letters::IsInboxOpen() antes de CustomBooks.
+8. Añadir config.h [Letters] Enabled=1 InteractKey=E PostmanHashes=... y strings Help_Envelope, SaveLetterHint.
+9. Build MSBuild /p:PlatformToolset=v143 y actualizar Documentacion/CHANGELOG.md con checklist testing: rip -> D funciona, rip -> L abre envelope, escribir From/To + dibujar, S guarda en Letters/Sent, acercarse a postman abre inbox, ENTER abre y muestra texto+dibujo original, DEL borra, reopen muestra owned.
