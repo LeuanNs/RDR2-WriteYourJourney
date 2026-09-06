@@ -362,16 +362,67 @@ namespace Letters
 
 		if (s_inboxOpen)
 		{
-			if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+			if (s_readingLetter)
 			{
-				if (s_readingLetter)
+				if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
 				{
 					s_readingLetter = false;
 					s_readingLetterId = -1;
 				}
-				else
+				else if (ImGui::IsKeyPressed(ImGuiKey_Delete, false))
+				{
+					const auto& letters = s_showingSent ? s_sentLetters : s_receivedLetters;
+					if (s_readingLetterId >= 0 && s_readingLetterId < (int)letters.size())
+					{
+						const Letter& letter = letters[s_readingLetterId];
+						fs::path dir = (letter.sent ? GetSentDir() : GetReceivedDir()) / ("LETTER" + std::to_string(letter.id));
+						if (fs::exists(dir) && fs::is_directory(dir))
+						{
+							fs::remove_all(dir);
+						}
+						ScanLetters();
+					}
+					s_readingLetter = false;
+					s_readingLetterId = -1;
+				}
+			}
+			else
+			{
+				if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
 				{
 					CloseInbox();
+				}
+				else if (ImGui::IsKeyPressed(ImGuiKey_Tab, false))
+				{
+					s_showingSent = !s_showingSent;
+					s_inboxIndex = 0;
+				}
+				else if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false))
+				{
+					const auto& letters = s_showingSent ? s_sentLetters : s_receivedLetters;
+					if (!letters.empty())
+					{
+						s_inboxIndex--;
+						if (s_inboxIndex < 0) s_inboxIndex = (int)letters.size() - 1;
+					}
+				}
+				else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, false))
+				{
+					const auto& letters = s_showingSent ? s_sentLetters : s_receivedLetters;
+					if (!letters.empty())
+					{
+						s_inboxIndex++;
+						if (s_inboxIndex >= (int)letters.size()) s_inboxIndex = 0;
+					}
+				}
+				else if (ImGui::IsKeyPressed(ImGuiKey_Enter, false))
+				{
+					const auto& letters = s_showingSent ? s_sentLetters : s_receivedLetters;
+					if (!letters.empty() && s_inboxIndex >= 0 && s_inboxIndex < (int)letters.size())
+					{
+						s_readingLetter = true;
+						s_readingLetterId = s_inboxIndex;
+					}
 				}
 			}
 		}
@@ -380,7 +431,7 @@ namespace Letters
 	void RenderInbox()
 	{
 		if (!WJConfig::LettersEnabled) return;
-		if (!s_inboxOpen) return;
+		if (!s_inboxOpen || s_readingLetter) return;
 
 		ImGuiIO& io = ImGui::GetIO();
 		ImDrawList* dl = ImGui::GetBackgroundDrawList();
@@ -395,11 +446,11 @@ namespace Letters
 		ImVec2 tsz = f->CalcTextSizeA(f->FontSize * 1.5f, FLT_MAX, 0.f, title);
 		dl->AddText(f, f->FontSize * 1.5f, { ds.x * 0.5f - tsz.x * 0.5f, ds.y * 0.08f }, IM_COL32(234, 223, 197, 255), title);
 
-		const char* tabLabel = s_showingSent ? "Sent" : "Received";
-		ImVec2 tbsz = df->CalcTextSizeA(df->FontSize * 1.2f, FLT_MAX, 0.f, tabLabel);
-		dl->AddText(df, df->FontSize * 1.2f, { ds.x * 0.5f - tbsz.x * 0.5f, ds.y * 0.15f }, IM_COL32(200, 180, 140, 230), tabLabel);
-
 		const auto& letters = s_showingSent ? s_sentLetters : s_receivedLetters;
+		std::string tabLabel = s_showingSent ? "Sent" : "Received";
+		tabLabel += " (" + std::to_string(letters.size()) + ")";
+		ImVec2 tbsz = df->CalcTextSizeA(df->FontSize * 1.2f, FLT_MAX, 0.f, tabLabel.c_str());
+		dl->AddText(df, df->FontSize * 1.2f, { ds.x * 0.5f - tbsz.x * 0.5f, ds.y * 0.15f }, IM_COL32(200, 180, 140, 230), tabLabel.c_str());
 
 		if (letters.empty())
 		{
@@ -446,6 +497,21 @@ namespace Letters
 			{
 				ImVec2 dsz = df->CalcTextSizeA(df->FontSize * 0.9f, FLT_MAX, 0.f, letter.date.c_str());
 				dl->AddText(df, df->FontSize * 0.9f, { envMx.x - dsz.x - 10.f, envMx.y - df->FontSize * 1.2f }, IM_COL32(100, 90, 70, 200), letter.date.c_str());
+			}
+
+			if (letters.size() > 1)
+			{
+				float arrowSize = 40.f;
+				float arrowY = envMn.y + envH * 0.5f;
+				float leftArrowX = envMn.x - arrowSize - 20.f;
+				float rightArrowX = envMx.x + 20.f;
+
+				dl->AddText(df, df->FontSize * 2.f, { leftArrowX, arrowY - df->FontSize }, IM_COL32(220, 200, 160, 230), "<");
+				dl->AddText(df, df->FontSize * 2.f, { rightArrowX, arrowY - df->FontSize }, IM_COL32(220, 200, 160, 230), ">");
+
+				std::string counter = std::to_string(s_inboxIndex + 1) + " / " + std::to_string(letters.size());
+				ImVec2 csz = df->CalcTextSizeA(df->FontSize, FLT_MAX, 0.f, counter.c_str());
+				dl->AddText(df, df->FontSize, { ds.x * 0.5f - csz.x * 0.5f, envMx.y + 15.f }, IM_COL32(200, 180, 140, 200), counter.c_str());
 			}
 		}
 
