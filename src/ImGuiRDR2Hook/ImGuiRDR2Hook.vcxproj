@@ -25,6 +25,7 @@
     <ClCompile Include="menu.cpp" />
     <ClCompile Include="custombooks.cpp" />
     <ClCompile Include="sheets.cpp" />
+    <ClCompile Include="letters.cpp" />
     <ClCompile Include="script.cpp" />
     <ClCompile Include="stb_image.cpp" />
   </ItemGroup>
@@ -48,6 +49,7 @@
     <ClInclude Include="menu.h" />
     <ClInclude Include="custombooks.h" />
     <ClInclude Include="sheets.h" />
+    <ClInclude Include="letters.h" />
     <ClInclude Include="script.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="config.h" />

@@ -44,6 +44,9 @@
     <ClCompile Include="Hook\Win32.cpp">
       <Filter>ImGuiHook</Filter>
     </ClCompile>
+    <ClCompile Include="custombooks.cpp" />
+    <ClCompile Include="sheets.cpp" />
+    <ClCompile Include="letters.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="keyboard.h" />
@@ -94,6 +97,10 @@
     <ClInclude Include="Hook\Manager.h">
       <Filter>ImGuiHook</Filter>
     </ClInclude>
+    <ClInclude Include="custombooks.h" />
+    <ClInclude Include="sheets.h" />
+    <ClInclude Include="letters.h" />
+    <ClInclude Include="config.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="include">
