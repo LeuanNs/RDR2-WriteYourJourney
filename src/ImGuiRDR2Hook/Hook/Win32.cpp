@@ -1,13 +1,14 @@
 #include "Manager.h"
 #include "../custombooks.h"
 #include "../sheets.h"
+#include "../letters.h"
 
 IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 static WNDPROC s_WndProc;
 
 static LRESULT WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	if (CImGuiMenu::GetIsOpen() || CustomBooks::IsInventoryOpen() || CustomBooks::IsBookOpen() || Sheets::IsShowingOverlay())
+	if (CImGuiMenu::GetIsOpen() || CustomBooks::IsInventoryOpen() || CustomBooks::IsBookOpen() || Sheets::IsShowingOverlay() || Letters::IsInboxOpen())
 	{
 		if (ImGui_ImplWin32_WndProcHandler(hwnd, uMsg, wParam, lParam))
 			return true;

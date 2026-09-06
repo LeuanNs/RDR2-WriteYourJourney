@@ -19,6 +19,7 @@
 #include "config.h"
 #include "custombooks.h"
 #include "sheets.h"
+#include "letters.h"
 #include "Hook/Manager.h"
 
 #include <algorithm>
@@ -2192,6 +2193,22 @@ void CImGuiMenu::Render()
 {
 	CustomBooks::HandleInput();
 	Sheets::HandleInput();
+	Letters::HandleInput();
+
+	if (Sheets::IsLetterFlowActive())
+	{
+		Sheets::Render();
+		return;
+	}
+
+	if (Letters::IsInboxOpen())
+	{
+		if (Letters::IsReadingLetter())
+			Letters::RenderLetterRead();
+		else
+			Letters::RenderInbox();
+		return;
+	}
 
 	if (Sheets::IsShowingOverlay() || Sheets::IsAnimating() || Sheets::IsRipping())
 	{
@@ -2219,6 +2236,7 @@ void CImGuiMenu::Render()
 	}
 
 	CustomBooks::RenderPickupPrompt();
+	Letters::RenderPostboxPrompt();
 
 	if (Sheets::IsEHoldActive())
 		Sheets::RenderEHoldPrompt();
