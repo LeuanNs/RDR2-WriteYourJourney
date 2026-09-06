@@ -1,5 +1,140 @@
 # Changelog - Write Your Journey
 
+## [Build - Sistema de Cartas (Letters)] - 2026-09-05
+
+### Nuevo sistema: Cartas (Letters)
+
+**Descripcion:** Sistema completo de cartas que permite al jugador convertir hojas arrancadas en cartas enviadas a otros personajes. Incluye animaciones de fold/envelope, overlay de escritura, persistencia en myjourney/Letters/, inbox de cartas, y polling de postboxes con coordenadas hardcodeadas.
+
+**Archivos nuevos:**
+- `src/ImGuiRDR2Hook/letters.h` - Structs Letter y API del namespace Letters
+- `src/ImGuiRDR2Hook/letters.cpp` - Implementacion completa del sistema de cartas
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/config.h` - Seccion [Letters] con Enabled, InteractKey, strings de localizacion
+- `src/ImGuiRDR2Hook/sheets.h` - Nuevas declaraciones para letter flow
+- `src/ImGuiRDR2Hook/sheets.cpp` - Animaciones fold/envelope, overlay de sobre, handler L/D
+- `src/ImGuiRDR2Hook/script.cpp` - Polling de postboxes, bloqueo de controles para inbox
+- `src/ImGuiRDR2Hook/menu.cpp` - Integracion Render order con Letters
+- `src/ImGuiRDR2Hook/Hook/Win32.cpp` - Input forwarding cuando inbox abierto
+- `src/ImGuiRDR2Hook/ImGuiRDR2Hook.vcxproj` - Agregados letters.cpp/h
+- `src/ImGuiRDR2Hook/ImGuiRDR2Hook.vcxproj.filters` - Agregados letters.cpp/h
+
+**Flujo completo:**
+
+1. **Estado 1 - Overlay RIP actual:**
+   - Hint cambiado: `L: Leave` → `D: Leave here`
+   - Nuevo hint: `L: Save as Letter`
+   - D → flujo actual LeaveSheetAtPlayer sin cambios
+   - L → entra al flujo de cartas (no cierra overlay, conserva s_overlayCache)
+
+2. **Estado 2 - Animaciones:**
+   - Anim 1: Fold a la mitad (scaleY 1.0→0.5, linea central oscura, 0.9s)
+   - Anim 2: Insert en sobre (rectangulo sobre + solapa triangular, hoja lerp al centro con alpha→0, 0.6s)
+   - Todo dibujado con ImDrawList, sin texturas
+
+3. **Estado 3 - Overlay de escritura sobre sobre:**
+   - Sobre fijo w=0.5*DisplaySize.x con sello rojo
+   - 2 campos: `From:` y `To:` (click para enfocar)
+   - Hints: `W: Write | D: Draw` (reservados para futuro)
+   - Cuando From+To tienen ≥1 char → habilita `S: Save Letter`
+   - ESC cancela el flujo
+
+4. **Estado 4 - Save Letter:**
+   - S: Save Letter guarda en `myjourney/Letters/Sent/LETTER<N>/`
+   - Archivos: envelope.ini (from, to, date, originalPage, bookName), letter.txt, letter_draw.dat, envelope_draw.dat
+   - Marca rip como consumido (IncrementPageDamage)
+   - NO crea Discoverable, crea Letter owned
+
+5. **Estado 5 - Polling postboxes:**
+   - 5 coordenadas hardcodeadas (random, a ajustar): Valentine, Rhodes, Saint Denis, etc.
+   - Radio de deteccion: 3m
+   - Prompt: "Post Office nearby" + "Press E to open inbox"
+   - Tecla configurable: [Letters] InteractKey=E
+
+6. **Estado 6 - Inbox de cartas:**
+   - Carousel horizontal tipo CustomBooks inventory
+   - Covers de sobres con sello rojo + texto To/From
+   - Flechas ← → navegan, ENTER abre carta, ESC cierra inbox
+   - TAB alterna Sent/Received
+   - Contador: "1 / 5"
+   - DEL borra carta (fs::remove_all)
+
+7. **Estado 7 - Lectura de carta:**
+   - Muestra contenido original (letter.txt) escalado
+   - Solo lectura, sin edicion
+   - ESC vuelve al inbox
+   - DEL borra carta
+
+**Configuracion INI:**
+```ini
+[Letters]
+Enabled=1
+InteractKey=E
+```
+
+**Build output:**
+- `WriteYourJourney.asi` compilado exitosamente en `C:\Users\evanm\Desktop\`
+- 0 errores, 2 advertencias pre-existentes
+
+### Checklist de Testing
+
+#### Estado 1 - Hints cambiados
+- [ ] Rippear pagina del journal → overlay muestra "D: Leave here | L: Save as Letter"
+- [ ] D → deja hoja en el mundo (flujo normal)
+- [ ] L → inicia flujo de cartas (animacion fold)
+
+#### Estado 2 - Animaciones
+- [ ] L en overlay → animacion de hoja doblándose a la mitad (0.9s)
+- [ ] Luego → animacion de hoja insertándose en sobre (0.6s)
+- [ ] Al terminar → overlay de sobre aparece
+
+#### Estado 3 - Overlay de sobre
+- [ ] Sobre centrado con sello rojo visible
+- [ ] Campos From: y To: visibles
+- [ ] Click en From: → campo se enfoca (fondo amarillo sutil)
+- [ ] Click en To: → campo se enfoca
+- [ ] Escribir en From: → texto aparece
+- [ ] Escribir en To: → texto aparece
+- [ ] Cuando ambos tienen ≥1 char → aparece hint "S: Save Letter"
+- [ ] ESC → cancela y vuelve al overlay normal
+
+#### Estado 4 - Save Letter
+- [ ] Escribir From y To → S: Save Letter habilitado
+- [ ] S → guarda en myjourney/Letters/Sent/LETTER<N>/
+- [ ] Verificar envelope.ini con from, to, date, originalPage
+- [ ] Verificar letter.txt con contenido original
+- [ ] Overlay desaparece, pagina marcada como daniada
+
+#### Estado 5 - Polling postboxes
+- [ ] Caminar a coordenadas hardcodeadas (ej: -1842, -1038, 180)
+- [ ] Acercarse a <3m → aparece prompt "Post Office nearby"
+- [ ] Press E → abre inbox
+- [ ] Tecla configurable en INI: InteractKey=F → funciona con F
+
+#### Estado 6 - Inbox
+- [ ] Abrir inbox → carousel de sobres visible
+- [ ] Flechas ← → → navegan entre cartas
+- [ ] Contador "1 / 5" actualizado
+- [ ] TAB → cambia entre Sent/Received
+- [ ] ENTER → abre carta seleccionada
+- [ ] ESC → cierra inbox
+- [ ] DEL en carta → borra carpeta LETTER<N>
+
+#### Estado 7 - Lectura
+- [ ] ENTER en carta → muestra contenido de letter.txt
+- [ ] ESC → vuelve al inbox
+- [ ] DEL → borra carta y vuelve al inbox
+
+#### Integracion
+- [ ] Journal sigue funcionando normalmente
+- [ ] CustomBooks sigue funcionando normalmente
+- [ ] Sheets sigue funcionando normalmente
+- [ ] No hay conflictos de teclas
+- [ ] Input forwarding funciona (mouse en inbox)
+
+---
+
 ## [Build - Batch 9: Overlay Text Fix + Visual Improvements + Crouch Animation] - 2026-09-03
 
 ### Fix: Custombook overlay no mostraba texto al rippear paginas lejanas
