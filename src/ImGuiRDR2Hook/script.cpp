@@ -368,24 +368,9 @@ namespace
 		if (PED::IS_PED_INJURED(ped) || PED::IS_PED_FATALLY_INJURED(ped))
 		{
 			ForceCloseJournal();
-				}
-			}
-
-			if (WJConfig::LettersEnabled)
-			{
-				Letters::SetPlayerCoords(pos.x, pos.y, pos.z);
-				Letters::UpdatePostboxPrompt(pos.x, pos.y, pos.z);
-
-				if (Letters::IsNearPostbox())
-				{
-					int interactVK = (int)(unsigned char)WJConfig::LettersInteractKey;
-					if ((SafeGetAsyncKeyState(interactVK) & 0x0001) != 0)
-					{
-						Letters::OpenInbox();
-					}
-				}
-			}
 		}
+	}
+}
 
 void main()
 {
@@ -576,6 +561,21 @@ void main()
 							Sheets::CancelWalk();
 							TASK::CLEAR_PED_TASKS(ped, TRUE, FALSE);
 						}
+					}
+				}
+			}
+
+			if (WJConfig::LettersEnabled)
+			{
+				Letters::SetPlayerCoords(pos.x, pos.y, pos.z);
+				Letters::UpdatePostboxPrompt(pos.x, pos.y, pos.z);
+
+				if (Letters::IsNearPostbox())
+				{
+					int interactVK = (int)(unsigned char)WJConfig::LettersInteractKey;
+					if ((SafeGetAsyncKeyState(interactVK) & 0x0001) != 0)
+					{
+						Letters::OpenInbox();
 					}
 				}
 			}
