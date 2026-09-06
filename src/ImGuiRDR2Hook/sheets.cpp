@@ -1034,7 +1034,16 @@ namespace Sheets
 				{
 					if (strlen(s_envelopeFrom) > 0 && strlen(s_envelopeTo) > 0)
 					{
-						Letters::TrySaveLetterFromOverlay(s_envelopeFrom, s_envelopeTo, s_envelopeDrawing);
+						Letters::TrySaveLetterFromOverlay(
+							s_envelopeFrom, 
+							s_envelopeTo, 
+							s_overlayCache.text, 
+							s_overlayCache.drawing, 
+							s_envelopeDrawing,
+							s_overlayCache.sourcePage,
+							s_overlayCache.fromJournal,
+							s_overlayCache.bookName
+						);
 						IncrementPageDamage(s_overlayCache.sourcePage, s_overlayCache.fromJournal, s_overlayCache.bookName);
 						SaveDamagedPagesIndex();
 						StopLetterFlow();

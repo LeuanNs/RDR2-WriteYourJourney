@@ -38,7 +38,7 @@ namespace Letters
 	bool IsReadingLetter();
 	void RenderLetterRead();
 
-	bool TrySaveLetterFromOverlay(const std::string& from, const std::string& to, const SheetDrawing& envelopeDrawing);
+	bool TrySaveLetterFromOverlay(const std::string& from, const std::string& to, const std::string& text, const SheetDrawing& drawing, const SheetDrawing& envelopeDrawing, int originalPage, bool fromJournal, const std::string& bookName);
 
 	int GetNextLetterId();
 

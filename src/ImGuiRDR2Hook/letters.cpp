@@ -295,7 +295,7 @@ namespace Letters
 	const std::vector<Letter>& GetSentLetters() { return s_sentLetters; }
 	const std::vector<Letter>& GetReceivedLetters() { return s_receivedLetters; }
 
-	bool TrySaveLetterFromOverlay(const std::string& from, const std::string& to, const SheetDrawing& envelopeDrawing)
+	bool TrySaveLetterFromOverlay(const std::string& from, const std::string& to, const std::string& text, const SheetDrawing& drawing, const SheetDrawing& envelopeDrawing, int originalPage, bool fromJournal, const std::string& bookName)
 	{
 		fs::path dir = GetSentDir();
 		fs::create_directories(dir);
@@ -318,6 +318,39 @@ namespace Letters
 			char dateBuf[64];
 			strftime(dateBuf, sizeof(dateBuf), "%Y-%m-%d %H:%M", &lt);
 			env << "date=" << dateBuf << "\n";
+			env << "originalPage=" << originalPage << "\n";
+			env << "bookName=" << bookName << "\n";
+		}
+
+		{
+			std::ofstream txt(letterDir / "letter.txt");
+			if (txt) txt << text;
+		}
+
+		if (!drawing.lines.empty())
+		{
+			SaveDrawingToFile(letterDir / "letter_draw.dat", drawing);
+		}
+
+		if (!envelopeDrawing.lines.empty())
+		{
+			SaveDrawingToFile(letterDir / "envelope_draw.dat", envelopeDrawing);
+		}
+
+		Letter letter;
+		letter.id = newId;
+		letter.from = from;
+		letter.to = to;
+		letter.text = text;
+		letter.drawing = drawing;
+		letter.envelopeDrawing = envelopeDrawing;
+		letter.originalPage = originalPage;
+		letter.bookName = bookName;
+		letter.sent = true;
+
+		{
+			std::lock_guard<std::mutex> lock(s_lettersMutex);
+			s_sentLetters.push_back(std::move(letter));
 		}
 
 		return true;
