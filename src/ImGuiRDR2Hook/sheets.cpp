@@ -1,6 +1,7 @@
 #define NOMINMAX
 #include "sheets.h"
 #include "custombooks.h"
+#include "letters.h"
 #include "config.h"
 #include "imgui/imgui.h"
 #include <filesystem>
@@ -987,6 +988,28 @@ namespace Sheets
 	{
 		if (!WJConfig::RipSheetsEnabled) return;
 
+		if (s_letterFlowActive)
+		{
+			if (s_letterFlowState == 1)
+			{
+				s_letterFoldAnimT += ImGui::GetIO().DeltaTime;
+				if (s_letterFoldAnimT >= FOLD_ANIM_DURATION)
+				{
+					s_letterFlowState = 2;
+					s_letterInsertAnimT = 0.f;
+				}
+			}
+			else if (s_letterFlowState == 2)
+			{
+				s_letterInsertAnimT += ImGui::GetIO().DeltaTime;
+				if (s_letterInsertAnimT >= INSERT_ANIM_DURATION)
+				{
+					s_letterFlowState = 3;
+				}
+			}
+			return;
+		}
+
 		if (s_ripping)
 		{
 			bool pDown = (GetAsyncKeyState('P') & 0x8000) != 0;
@@ -1499,9 +1522,114 @@ namespace Sheets
 
 	const RippedSheetCache& GetOverlayCache() { return s_overlayCache; }
 
+	static void DrawFoldAnimation(const ImVec2 ds, float A)
+	{
+		ImDrawList* dl = ImGui::GetBackgroundDrawList();
+		float t = s_letterFoldAnimT / FOLD_ANIM_DURATION;
+		if (t > 1.f) t = 1.f;
+
+		float w = ds.x * 0.5f;
+		float h = ds.y * 0.78f;
+		ImVec2 mn{ (ds.x - w) * 0.5f, (ds.y - h) * 0.5f };
+		ImVec2 mx{ mn.x + w, mn.y + h };
+
+		float scaleY = 1.0f - 0.5f * t;
+		float sheetH = h * scaleY;
+		ImVec2 sheetMn{ mn.x, mn.y + (h - sheetH) * 0.5f };
+		ImVec2 sheetMx{ mx.x, sheetMn.y + sheetH };
+
+		unsigned seed = 4242u;
+		float jag = 6.f;
+		std::vector<ImVec2> poly;
+		poly.push_back(sheetMn);
+		float step = 12.f;
+		for (float x = sheetMn.x + step; x < sheetMx.x; x += step)
+		{
+			float jy = sheetMn.y + (Rng(seed) - 0.5f) * jag;
+			poly.push_back({ x, jy });
+		}
+		poly.push_back({ sheetMx.x, sheetMn.y });
+		for (float y = sheetMn.y + step; y < sheetMx.y; y += step)
+		{
+			float jx = sheetMx.x + (Rng(seed) - 0.5f) * jag;
+			poly.push_back({ jx, y });
+		}
+		poly.push_back({ sheetMx.x, sheetMx.y });
+		for (float x = sheetMx.x - step; x > sheetMn.x; x -= step)
+		{
+			float jy = sheetMx.y + (Rng(seed) - 0.5f) * jag;
+			poly.push_back({ x, jy });
+		}
+		poly.push_back(sheetMn);
+		for (float y = sheetMx.y - step; y > sheetMn.y; y -= step)
+		{
+			float jx = sheetMn.x + (Rng(seed) - 0.5f) * jag;
+			poly.push_back({ jx, y });
+		}
+
+		dl->AddConvexPolyFilled(poly.data(), (int)poly.size(), FadeCol(IM_COL32(210, 200, 175, 255), A));
+		dl->AddPolyline(poly.data(), (int)poly.size(), FadeCol(IM_COL32(160, 140, 110, 200), A), ImDrawFlags_None, 1.5f);
+
+		if (t > 0.3f)
+		{
+			float foldAlpha = (t - 0.3f) / 0.7f;
+			float centerY = sheetMn.y + sheetH * 0.5f;
+			dl->AddLine({ sheetMn.x, centerY }, { sheetMx.x, centerY }, FadeCol(IM_COL32(100, 80, 60, 180), A * foldAlpha), 2.f);
+		}
+	}
+
+	static void DrawEnvelopeInsertAnimation(const ImVec2 ds, float A)
+	{
+		ImDrawList* dl = ImGui::GetBackgroundDrawList();
+		float t = s_letterInsertAnimT / INSERT_ANIM_DURATION;
+		if (t > 1.f) t = 1.f;
+
+		float envW = ds.x * 0.4f;
+		float envH = ds.y * 0.25f;
+		ImVec2 envMn{ ds.x * 0.5f - envW * 0.5f, ds.y * 0.5f - envH * 0.5f };
+		ImVec2 envMx{ envMn.x + envW, envMn.y + envH };
+
+		dl->AddRectFilled(envMn, envMx, FadeCol(IM_COL32(210, 200, 175, 255), A), 4.f);
+		dl->AddRect(envMn, envMx, FadeCol(IM_COL32(160, 140, 110, 200), A), 4.f, 0, 2.f);
+
+		ImVec2 flapPts[3] = {
+			envMn,
+			{ ds.x * 0.5f, envMn.y + envH * 0.3f },
+			{ envMx.x, envMn.y }
+		};
+		dl->AddTriangleFilled(flapPts[0], flapPts[1], flapPts[2], FadeCol(IM_COL32(190, 180, 155, 255), A));
+		dl->AddTriangle(flapPts[0], flapPts[1], flapPts[2], FadeCol(IM_COL32(160, 140, 110, 200), A), 1.5f);
+
+		float sheetStartY = ds.y * 0.2f;
+		float sheetEndY = envMn.y + envH * 0.5f;
+		float sheetY = sheetStartY + (sheetEndY - sheetStartY) * t;
+		float sheetAlpha = 1.0f - t;
+		float sheetW = envW * 0.8f;
+		float sheetH = envH * 0.6f;
+		ImVec2 sheetMn{ ds.x * 0.5f - sheetW * 0.5f, sheetY };
+		ImVec2 sheetMx{ sheetMn.x + sheetW, sheetY + sheetH };
+
+		dl->AddRectFilled(sheetMn, sheetMx, FadeCol(IM_COL32(220, 210, 185, 255), A * sheetAlpha), 2.f);
+		dl->AddRect(sheetMn, sheetMx, FadeCol(IM_COL32(170, 150, 120, 200), A * sheetAlpha), 2.f, 0, 1.f);
+	}
+
 	void Render()
 	{
 		if (!WJConfig::RipSheetsEnabled) return;
+
+		if (s_letterFlowActive)
+		{
+			ImGuiIO& io = ImGui::GetIO();
+			if (s_letterFlowState == 1)
+			{
+				DrawFoldAnimation(io.DisplaySize, 1.f);
+			}
+			else if (s_letterFlowState == 2)
+			{
+				DrawEnvelopeInsertAnimation(io.DisplaySize, 1.f);
+			}
+			return;
+		}
 
 		if (s_showingOverlay)
 		{
