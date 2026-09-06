@@ -92,6 +92,15 @@ namespace Sheets
 	static constexpr float FOLD_ANIM_DURATION = 0.9f;
 	static constexpr float INSERT_ANIM_DURATION = 0.6f;
 
+	static char s_envelopeFrom[256] = { 0 };
+	static char s_envelopeTo[256] = { 0 };
+	static bool s_envelopeWritingMode = false;
+	static bool s_envelopeDrawingMode = false;
+	static SheetDrawing s_envelopeDrawing;
+	static char s_envelopeNoteText[2048] = { 0 };
+	static bool s_envelopeFromFocused = false;
+	static bool s_envelopeToFocused = false;
+
 	static fs::path GetDiscoverablesDir()
 	{
 		return fs::path(WJConfig::GetModuleDir()) / "myjourney" / "Discoverables";
@@ -1005,6 +1014,81 @@ namespace Sheets
 				if (s_letterInsertAnimT >= INSERT_ANIM_DURATION)
 				{
 					s_letterFlowState = 3;
+					s_envelopeFrom[0] = 0;
+					s_envelopeTo[0] = 0;
+					s_envelopeNoteText[0] = 0;
+					s_envelopeDrawing.lines.clear();
+					s_envelopeFromFocused = false;
+					s_envelopeToFocused = false;
+					s_envelopeWritingMode = false;
+					s_envelopeDrawingMode = false;
+				}
+			}
+			else if (s_letterFlowState == 3)
+			{
+				if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+				{
+					StopLetterFlow();
+				}
+				else if (ImGui::IsKeyPressed(ImGuiKey_S, false))
+				{
+					if (strlen(s_envelopeFrom) > 0 && strlen(s_envelopeTo) > 0)
+					{
+						Letters::TrySaveLetterFromOverlay(s_envelopeFrom, s_envelopeTo, s_envelopeDrawing);
+						IncrementPageDamage(s_overlayCache.sourcePage, s_overlayCache.fromJournal, s_overlayCache.bookName);
+						SaveDamagedPagesIndex();
+						StopLetterFlow();
+					}
+				}
+				else if (ImGui::IsKeyPressed(ImGuiKey_W, false))
+				{
+					s_envelopeWritingMode = !s_envelopeWritingMode;
+					s_envelopeDrawingMode = false;
+				}
+				else if (ImGui::IsKeyPressed(ImGuiKey_D, false))
+				{
+					s_envelopeDrawingMode = !s_envelopeDrawingMode;
+					s_envelopeWritingMode = false;
+				}
+				else if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+				{
+					ImGuiIO& io = ImGui::GetIO();
+					ImFont* df = ImGui::GetFont();
+					float envW = io.DisplaySize.x * 0.5f;
+					float envH = io.DisplaySize.y * 0.3f;
+					ImVec2 envMn{ io.DisplaySize.x * 0.5f - envW * 0.5f, io.DisplaySize.y * 0.25f };
+					float textX = envMn.x + 20.f;
+					float textY = envMn.y + envH * 0.4f;
+					float fontSize = df->FontSize * 1.1f;
+					float inputX = textX + df->CalcTextSizeA(fontSize, FLT_MAX, 0.f, "From:  ").x;
+					float inputW = envW * 0.5f;
+
+					float fromY = textY;
+					float toY = textY + fontSize * 1.8f;
+
+					if (io.MousePos.x >= inputX && io.MousePos.x <= inputX + inputW)
+					{
+						if (io.MousePos.y >= fromY && io.MousePos.y <= fromY + fontSize)
+						{
+							s_envelopeFromFocused = true;
+							s_envelopeToFocused = false;
+						}
+						else if (io.MousePos.y >= toY && io.MousePos.y <= toY + fontSize)
+						{
+							s_envelopeFromFocused = false;
+							s_envelopeToFocused = true;
+						}
+						else
+						{
+							s_envelopeFromFocused = false;
+							s_envelopeToFocused = false;
+						}
+					}
+					else
+					{
+						s_envelopeFromFocused = false;
+						s_envelopeToFocused = false;
+					}
 				}
 			}
 			return;
@@ -1613,6 +1697,100 @@ namespace Sheets
 		dl->AddRect(sheetMn, sheetMx, FadeCol(IM_COL32(170, 150, 120, 200), A * sheetAlpha), 2.f, 0, 1.f);
 	}
 
+	static void DrawEnvelopeOverlay(const ImVec2 ds, float A)
+	{
+		ImDrawList* dl = ImGui::GetBackgroundDrawList();
+		ImFont* f = ImGui::GetIO().Fonts->Fonts.Size > 1 ? ImGui::GetIO().Fonts->Fonts[1] : ImGui::GetFont();
+		ImFont* df = ImGui::GetFont();
+
+		dl->AddRectFilled({ 0, 0 }, ds, IM_COL32(0, 0, 0, (int)(140.f * A)));
+
+		float envW = ds.x * 0.5f;
+		float envH = ds.y * 0.3f;
+		ImVec2 envMn{ ds.x * 0.5f - envW * 0.5f, ds.y * 0.25f };
+		ImVec2 envMx{ envMn.x + envW, envMn.y + envH };
+
+		dl->AddRectFilled(envMn, envMx, FadeCol(IM_COL32(220, 210, 180, 255), A), 4.f);
+		dl->AddRect(envMn, envMx, FadeCol(IM_COL32(160, 140, 110, 230), A), 4.f, 0, 2.f);
+
+		ImVec2 flapPts[3] = {
+			envMn,
+			{ ds.x * 0.5f, envMn.y + envH * 0.25f },
+			{ envMx.x, envMn.y }
+		};
+		dl->AddTriangleFilled(flapPts[0], flapPts[1], flapPts[2], FadeCol(IM_COL32(200, 190, 160, 255), A));
+		dl->AddTriangle(flapPts[0], flapPts[1], flapPts[2], FadeCol(IM_COL32(160, 140, 110, 200), A), 1.5f);
+
+		float stampSize = envH * 0.2f;
+		ImVec2 stampMn{ envMx.x - stampSize - 15.f, envMn.y + 12.f };
+		ImVec2 stampMx{ stampMn.x + stampSize, stampMn.y + stampSize };
+		dl->AddRectFilled(stampMn, stampMx, FadeCol(IM_COL32(180, 40, 30, 230), A), 2.f);
+
+		float textX = envMn.x + 20.f;
+		float textY = envMn.y + envH * 0.4f;
+		float fontSize = df->FontSize * 1.1f;
+
+		std::string fromLabel = WJConfig::Letters_EnvelopeFrom;
+		dl->AddText(df, fontSize, { textX, textY }, FadeCol(IM_COL32(60, 50, 40, 255), A), fromLabel.c_str());
+
+		std::string toLabel = WJConfig::Letters_EnvelopeTo;
+		dl->AddText(df, fontSize, { textX, textY + fontSize * 1.8f }, FadeCol(IM_COL32(60, 50, 40, 255), A), toLabel.c_str());
+
+		float inputX = textX + df->CalcTextSizeA(fontSize, FLT_MAX, 0.f, "From:  ").x;
+		float inputY = textY;
+		float inputW = envW * 0.5f;
+
+		if (s_envelopeFromFocused)
+		{
+			dl->AddRectFilled({ inputX - 2.f, inputY - 2.f }, { inputX + inputW + 2.f, inputY + fontSize + 4.f }, FadeCol(IM_COL32(255, 255, 240, 80), A), 2.f);
+		}
+		dl->AddText(df, fontSize, { inputX, inputY }, FadeCol(IM_COL32(40, 30, 20, 255), A), s_envelopeFrom);
+
+		float inputY2 = textY + fontSize * 1.8f;
+		if (s_envelopeToFocused)
+		{
+			dl->AddRectFilled({ inputX - 2.f, inputY2 - 2.f }, { inputX + inputW + 2.f, inputY2 + fontSize + 4.f }, FadeCol(IM_COL32(255, 255, 240, 80), A), 2.f);
+		}
+		dl->AddText(df, fontSize, { inputX, inputY2 }, FadeCol(IM_COL32(40, 30, 20, 255), A), s_envelopeTo);
+
+		if (!s_envelopeDrawing.lines.empty())
+		{
+			float drawAreaX = envMn.x + envW * 0.1f;
+			float drawAreaY = envMx.y + 20.f;
+			float drawAreaW = envW * 0.8f;
+			float drawAreaH = ds.y * 0.15f;
+
+			dl->AddRectFilled({ drawAreaX, drawAreaY }, { drawAreaX + drawAreaW, drawAreaY + drawAreaH }, FadeCol(IM_COL32(200, 190, 165, 100), A), 3.f);
+			dl->AddRect({ drawAreaX, drawAreaY }, { drawAreaX + drawAreaW, drawAreaY + drawAreaH }, FadeCol(IM_COL32(140, 120, 90, 150), A), 3.f, 0, 1.f);
+
+			for (const auto& line : s_envelopeDrawing.lines)
+			{
+				if (line.points.size() < 2) continue;
+				for (size_t i = 1; i < line.points.size(); ++i)
+				{
+					ImVec2 p1 = { drawAreaX + line.points[i - 1].x * drawAreaW, drawAreaY + line.points[i - 1].y * drawAreaH };
+					ImVec2 p2 = { drawAreaX + line.points[i].x * drawAreaW, drawAreaY + line.points[i].y * drawAreaH };
+					dl->AddLine(p1, p2, FadeCol(line.color, A * 0.8f), line.thickness);
+				}
+			}
+		}
+
+		const float refH = 1080.f;
+		const float scaleFactor = std::clamp(ds.y / refH, 0.6f, 1.5f);
+		const float fh = df->FontSize * 1.2f * scaleFactor;
+		const float helpY = ds.y - fh * 1.9f;
+		const float xm = std::max(ds.x * 0.018f, 10.f);
+
+		std::string helpStr = WJConfig::Letters_EnvelopeHint;
+		bool canSave = strlen(s_envelopeFrom) > 0 && strlen(s_envelopeTo) > 0;
+		if (canSave)
+		{
+			helpStr += "   |   " + WJConfig::Letters_SaveLetter;
+		}
+		helpStr += "   |   ESC: Cancel";
+		dl->AddText(df, fh, { xm, helpY }, FadeCol(IM_COL32(228, 216, 192, 150), A), helpStr.c_str());
+	}
+
 	void Render()
 	{
 		if (!WJConfig::RipSheetsEnabled) return;
@@ -1627,6 +1805,10 @@ namespace Sheets
 			else if (s_letterFlowState == 2)
 			{
 				DrawEnvelopeInsertAnimation(io.DisplaySize, 1.f);
+			}
+			else if (s_letterFlowState == 3)
+			{
+				DrawEnvelopeOverlay(io.DisplaySize, 1.f);
 			}
 			return;
 		}
