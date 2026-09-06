@@ -1,10 +1,95 @@
 # Testing - Write Your Journey - Guia Rapida para Leuan
-> Ultima Build: 2026-09-03 (Batch 9 - Overlay Text Fix + Visual Improvements + Crouch Animation)
+> Ultima Build: 2026-09-05 (Sistema de Cartas - Letters)
 > Como usar: entra al juego, ve seccion por seccion. Marca [x] si OK, deja [ ] si falla y anota al lado que viste.
 
 ---
 
-### 0) Hojas Arrancadas (SHEETS) - Journal
+### 0) Sistema de Cartas (LETTERS) - NUEVO
+
+#### Estado 1: Hints cambiados en overlay de hoja
+**Preparacion:** rippear pagina del journal (P hold 3s)
+
+- [ ] Overlay de hoja arrancada muestra "D: Leave here | L: Save as Letter"
+- [ ] D → deja hoja en el mundo (flujo normal, sin cambios)
+- [ ] L → inicia flujo de cartas (animacion fold comienza)
+- [ ] ESC → restaura pagina (flujo normal, sin cambios)
+
+#### Estado 2: Animaciones fold + envelope
+**Preparacion:** presionar L en overlay de hoja arrancada
+
+- [ ] Anim 1: hoja se dobla a la mitad (scaleY 1.0→0.5, 0.9s)
+- [ ] Linea central oscura visible durante el fold (pliegue)
+- [ ] Anim 2: hoja se inserta en sobre (0.6s)
+- [ ] Sobre visible: rectangulo color (210,200,175) con solapa triangular
+- [ ] Hoja hace lerp hacia centro del sobre con alpha 1→0
+- [ ] Al terminar ambas animaciones → overlay de sobre aparece
+
+#### Estado 3: Overlay de escritura sobre sobre
+**Preparacion:** esperar a que terminen animaciones del Estado 2
+
+- [ ] Sobre centrado w=0.5*DisplaySize.x visible
+- [ ] Sello rojo (180,40,30) en esquina superior derecha del sobre
+- [ ] Campos "From:" y "To:" visibles sobre el sobre
+- [ ] Click en From: → campo se enfoca (fondo amarillo sutil)
+- [ ] Click en To: → campo se enfoca
+- [ ] Escribir en From: → texto aparece (ej: "Arthur")
+- [ ] Escribir en To: → texto aparece (ej: "Mary")
+- [ ] Hints visibles: "W: Write | D: Draw" (reservados para futuro)
+- [ ] Cuando From+To tienen ≥1 char → aparece "S: Save Letter"
+- [ ] ESC → cancela flujo y vuelve al overlay normal de hoja
+
+#### Estado 4: Save Letter (persistencia)
+**Preparacion:** escribir From y To, presionar S
+
+- [ ] S → guarda en myjourney/Letters/Sent/LETTER<N>/
+- [ ] Verificar envelope.ini: from, to, date, originalPage, bookName
+- [ ] Verificar letter.txt: contiene texto original de la pagina
+- [ ] Overlay desaparece, pagina marcada como daniada (damageCount++)
+- [ ] NO se creo carpeta en myjourney/Discoverables/ (es Letter, no Sheet)
+- [ ] Cerrar y reabrir juego → LETTER<N> sigue en myjourney/Letters/Sent/
+
+#### Estado 5: Polling de postboxes (coordenadas hardcodeadas)
+**Preparacion:** caminar a coordenadas de postbox (ej: -1842, -1038, 180)
+
+- [ ] Acercarse a <3m de coordenada → aparece prompt "Post Office nearby"
+- [ ] Prompt muestra "Press E to open inbox" (tecla configurable)
+- [ ] Cambiar InteractKey=F en INI → prompt muestra "Press F"
+- [ ] Press E (o tecla configurada) → abre inbox
+- [ ] Alejarse >3m → prompt desaparece
+
+#### Estado 6: Inbox de cartas (carousel)
+**Preparacion:** abrir inbox cerca de postbox
+
+- [ ] Inbox abierto → carousel de sobres visible
+- [ ] Cada sobre muestra: To: X, From: Y, fecha
+- [ ] Flechas ← → → navegan entre cartas
+- [ ] Contador "1 / 5" visible y actualizado
+- [ ] TAB → cambia entre Sent/Received
+- [ ] ENTER sobre sobre → abre carta seleccionada
+- [ ] ESC → cierra inbox y devuelve control
+
+#### Estado 7: Lectura de carta
+**Preparacion:** abrir carta desde inbox (ENTER)
+
+- [ ] Carta abierta → muestra contenido de letter.txt escalado
+- [ ] Solo lectura, sin edicion posible
+- [ ] ESC → vuelve al inbox
+- [ ] DEL → borra carta (fs::remove_all de LETTER<N>) y vuelve al inbox
+- [ ] Reabrir inbox → carta borrada ya no aparece
+
+#### Integracion con sistemas existentes
+**Preparacion:** probar sistemas existentes despues de implementar cartas
+
+- [ ] Journal abre/cierra normalmente (J)
+- [ ] CustomBooks abre/cierra normalmente (B 3s)
+- [ ] Sheets rip/leave/restore funciona normalmente
+- [ ] No hay conflictos de teclas entre sistemas
+- [ ] Input forwarding funciona (mouse en inbox)
+- [ ] Bloqueo de controles activo cuando inbox abierto
+
+---
+
+### 1) Hojas Arrancadas (SHEETS) - Journal
 
 #### Fix: Custombook overlay texto - BATCH 9
 **Preparacion:** custombook abierto, navegar a pagina lejana (ej: 1095), rippear
@@ -63,7 +148,7 @@
 
 ---
 
-### 1) Random page lazy loading - BATCH 7 (PENDIENTE)
+### 2) Random page lazy loading - BATCH 7 (PENDIENTE)
 **Preparacion:** abre satchel (B 3s), selecciona libro grande (ej: Biblia)
 
 - [ ] Presionar R en satchel → ¿abre pagina aleatoria?
