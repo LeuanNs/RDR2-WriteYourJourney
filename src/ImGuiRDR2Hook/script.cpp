@@ -18,6 +18,7 @@
 #include "menu.h"
 #include "custombooks.h"
 #include "sheets.h"
+#include "letters.h"
 #include "config.h"
 #include "Hook/Manager.h"
 
@@ -367,9 +368,24 @@ namespace
 		if (PED::IS_PED_INJURED(ped) || PED::IS_PED_FATALLY_INJURED(ped))
 		{
 			ForceCloseJournal();
+				}
+			}
+
+			if (WJConfig::LettersEnabled)
+			{
+				Letters::SetPlayerCoords(pos.x, pos.y, pos.z);
+				Letters::UpdatePostboxPrompt(pos.x, pos.y, pos.z);
+
+				if (Letters::IsNearPostbox())
+				{
+					int interactVK = (int)(unsigned char)WJConfig::LettersInteractKey;
+					if ((SafeGetAsyncKeyState(interactVK) & 0x0001) != 0)
+					{
+						Letters::OpenInbox();
+					}
+				}
+			}
 		}
-	}
-}
 
 void main()
 {
@@ -380,6 +396,7 @@ void main()
 	bool s_pickupKeyWasDown = false;
 
 	Sheets::Init();
+	Letters::Init();
 
 	while (true)
 	{
@@ -416,6 +433,21 @@ void main()
 				CustomBooks::CloseInventory();
 				CustomBooks::CloseBook();
 				CustomBooks::CloseIndex();
+				WAIT(0);
+				continue;
+			}
+
+			WAIT(0);
+			continue;
+		}
+
+		if (Letters::IsInboxOpen())
+		{
+			LockControlsThisFrame();
+
+			if (!GameHasFocus())
+			{
+				Letters::CloseInbox();
 				WAIT(0);
 				continue;
 			}
