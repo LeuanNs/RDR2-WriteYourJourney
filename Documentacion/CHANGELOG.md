@@ -1,5 +1,81 @@
 # Changelog - Write Your Journey
 
+## [Build - Fix Hints y Funcionalidad W/D en Envelope] - 2026-09-07
+
+### Fix: Textos de hints corregidos
+- `L: Leave here` → `D: Drop Here`
+- `L: Save as Letter` → `L: Save as a letter`
+
+### Fix: Funcionalidad W/D en overlay de sobre implementada
+
+**Modo Escritura (W):**
+- W activa modo escritura automáticamente
+- Si ningún campo enfocado → enfoca "To" automáticamente
+- Mouse visible para seleccionar campos From/To con click
+- Input de caracteres via ImGui::GetIO().InputQueueCharacters
+- Backspace funciona para borrar último carácter
+- Solo caracteres ASCII 32-126 aceptados
+
+**Modo Dibujo (D):**
+- D activa modo dibujo en todo el sobre (canvas completo)
+- Mouse se convierte en cursor de dibujo
+- Trazos normalizados (0..1) como en journal
+- Dibujos se guardan en `envelope_draw.dat`
+- Texto From/To siempre se dibuja por encima de los trazos
+
+**Borrador (E en modo dibujo):**
+- E toggle modo borrador ON/OFF
+- Círculo blanco muestra radio de borrado
+- Z/X ajustan radio (8-40px, step 2px)
+- Borra líneas completas si algún punto está dentro del radio
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/config.h` - Textos de hints corregidos
+- `src/ImGuiRDR2Hook/sheets.cpp` - Variables de estado para dibujo, handlers W/D/E/Z/X, lógica de dibujo con mouse, render de trazos sobre sobre
+
+**Build output:**
+- `WriteYourJourney.asi` compilado exitosamente en `C:\Users\evanm\Desktop\`
+- 0 errores, 0 advertencias
+
+### Checklist de Testing
+
+#### Hints corregidos
+- [ ] Rippear pagina → overlay muestra "D: Drop Here | L: Save as a letter"
+- [ ] Textos correctos y legibles
+
+#### Modo Escritura (W)
+- [ ] Presionar W → modo escritura activado
+- [ ] Si ningún campo enfocado → "To" se enfoca automáticamente
+- [ ] Click en From: → campo se enfoca, escribir aparece ahí
+- [ ] Click en To: → campo se enfoca, escribir aparece ahí
+- [ ] Escribir caracteres → texto aparece en campo enfocado
+- [ ] Backspace → borra último carácter
+- [ ] Mouse visible durante modo escritura
+
+#### Modo Dibujo (D)
+- [ ] Presionar D → modo dibujo activado
+- [ ] Mouse se convierte en cursor de dibujo
+- [ ] Click y arrastrar sobre sobre → trazos visibles
+- [ ] Trazos se extienden por todo el sobre (no solo área pequeña)
+- [ ] Texto From/To siempre visible por encima de trazos
+- [ ] Soltar mouse → trazo se guarda
+- [ ] Múltiples trazos posibles
+
+#### Borrador (E en modo dibujo)
+- [ ] Presionar E en modo dibujo → toggle borrador ON/OFF
+- [ ] Borrador ON → círculo blanco visible alrededor del cursor
+- [ ] Z → aumenta radio (hasta 40px)
+- [ ] X → disminuye radio (hasta 8px)
+- [ ] Click y arrastrar con borrador → líneas se borran
+- [ ] Líneas se borran completas si algún punto dentro del radio
+
+#### Persistencia
+- [ ] S: Save Letter → guarda envelope_draw.dat
+- [ ] Cerrar y reabrir juego → dibujos del sobre se mantienen
+- [ ] Inbox muestra sobres con dibujos (cuando se implemente)
+
+---
+
 ## [Build - Sistema de Cartas (Letters)] - 2026-09-05
 
 ### Nuevo sistema: Cartas (Letters)

@@ -34,7 +34,12 @@
 - [ ] Click en To: → campo se enfoca
 - [ ] Escribir en From: → texto aparece (ej: "Arthur")
 - [ ] Escribir en To: → texto aparece (ej: "Mary")
-- [ ] Hints visibles: "W: Write | D: Draw" (reservados para futuro)
+- [ ] **W**: Activa modo escritura, enfoca automáticamente "To" si ninguno enfocado
+- [ ] **D**: Activa modo dibujo en todo el sobre (canvas completo)
+- [ ] **E** (en modo dibujo): Toggle borrador (circulo blanco visible)
+- [ ] **Z/X** (en modo dibujo con borrador): Ajustar radio (8-40px)
+- [ ] Dibujar con mouse en modo D → trazos visibles sobre todo el sobre
+- [ ] Texto From/To siempre visible por encima de los dibujos
 - [ ] Cuando From+To tienen ≥1 char → aparece "S: Save Letter"
 - [ ] ESC → cancela flujo y vuelve al overlay normal de hoja
 

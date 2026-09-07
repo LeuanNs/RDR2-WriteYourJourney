@@ -36,6 +36,13 @@ El mod se integra con el juego mediante hooks de Vulkan/DX12 y ScriptHookRDR2, p
 | `sheets.cpp` | 1524 | Sistema de hojas arrancadas. Rip de paginas (P hold 3s), overlay de hoja, discoverables en el mundo, caminata+crouch para pickup, animaciones de rip/restore/flip, KeepSheet, LeaveSheet. |
 | `sheets.h` | 123 | Structs: `SheetDrawingLine`, `SheetDrawing`, `RippedSheetCache`, `DiscoverableSheet`. API del namespace `Sheets`. |
 
+### Sistema Letters (Cartas)
+
+| Archivo | Lineas | Descripcion |
+|---------|--------|-------------|
+| `letters.cpp` | ~400 | Sistema completo de cartas. Animaciones fold/envelope, overlay de escritura con From/To, modo dibujo en sobre, persistencia en myjourney/Letters/, inbox de cartas, polling de postboxes. |
+| `letters.h` | ~60 | Structs: `Letter`. API del namespace `Letters`: `Init()`, `IsInboxOpen()`, `HandleInput()`, `RenderInbox()`, `TrySaveLetterFromOverlay()`. |
+
 ### Hooks de Renderizado
 
 | Archivo | Lineas | Descripcion |
@@ -250,7 +257,98 @@ PickupMessage=Presiona E para obtener el libro
 - Flip: 0.8s (escala horizontal coseno para ver trasera)
 - Crouch: 1.2s (animacion de agacharse)
 
-### 4. Iluminacion Dinamica
+### 4. Sistema de Cartas (Letters)
+
+**Flujo completo de creacion de carta:**
+
+1. **Estado 1 - Overlay de hoja arrancada:**
+   - Tras rippear pagina (P hold 3s), overlay muestra opciones
+   - **D**: Drop Here - deja hoja en el mundo (crea Discoverable, flujo normal)
+   - **L**: Save as a letter - inicia flujo de cartas (conserva s_overlayCache)
+   - **ESC**: Restaura pagina original (flujo normal)
+   - **R**: Look Behind - flip 3D para ver trasera (si tiene contenido)
+
+2. **Estado 2 - Animaciones de fold + envelope:**
+   - Anim 1: Fold a la mitad (scaleY 1.0→0.5, linea central oscura, 0.9s)
+   - Anim 2: Insert en sobre (hoja lerp al centro con alpha 1→0, 0.6s)
+   - Todo dibujado con ImDrawList, sin texturas
+   - Al terminar → overlay de sobre aparece
+
+3. **Estado 3 - Overlay de escritura sobre sobre:**
+   - Sobre centrado w=0.5*DisplaySize.x con sello rojo IM_COL32(180,40,30)
+   - Dos campos de texto: `From:` y `To:` (click para enfocar)
+   - **W**: Activa modo escritura, enfoca automáticamente "To" si ninguno enfocado
+   - **D**: Activa modo dibujo en todo el sobre (canvas completo)
+   - **E** (en modo dibujo): Toggle borrador
+   - **Z/X** (en modo dibujo con borrador): Ajustar radio (8-40px)
+   - **Mouse**: Click en campos From/To para enfocar, dibujar en modo D
+   - Cuando From+To tienen ≥1 char → habilita `S: Save Letter`
+   - **ESC**: Cancela flujo y vuelve al overlay de hoja
+
+4. **Estado 4 - Save Letter:**
+   - **S**: Save Letter guarda en `myjourney/Letters/Sent/LETTER<N>/`
+   - Archivos creados:
+     - `envelope.ini` - [Envelope] con from, to, date, originalPage, bookName
+     - `letter.txt` - Texto original de la pagina arrancada
+     - `letter_draw.dat` - Dibujos de la pagina original
+     - `envelope_draw.dat` - Dibujos hechos sobre el sobre
+   - Marca rip como consumido (IncrementPageDamage)
+   - NO crea Discoverable, crea Letter owned
+   - Overlay desaparece, vuelve al juego
+
+**Archivos de cartas:** `myjourney/Letters/Sent/LETTER<N>/` con:
+- `envelope.ini` - Configuracion del sobre (from, to, date, originalPage, bookName)
+- `letter.txt` - Contenido de texto de la carta
+- `letter_draw.dat` - Dibujos de la pagina original (formato binario, magic `0x574A4C01`)
+- `envelope_draw.dat` - Dibujos hechos sobre el sobre (firma, decoracion)
+
+**Inbox de cartas (postboxes):**
+
+**Controles del Inbox:**
+- **E** (configurable): Abrir inbox al estar cerca de postbox (<3m)
+- **Flechas ← →**: Navegar entre cartas (carousel)
+- **TAB**: Alternar entre Sent/Received
+- **ENTER**: Abrir carta seleccionada
+- **ESC**: Cerrar inbox
+- **DEL**: Borrar carta (fs::remove_all de LETTER<N>)
+
+**Polling de postboxes:**
+- 5 coordenadas hardcodeadas (Valentine, Rhodes, Saint Denis, etc.)
+- Radio de deteccion: 3m
+- Prompt: "Post Office nearby" + "Press E to open inbox"
+- Tecla configurable: `[Letters] InteractKey=E`
+
+**Lectura de carta:**
+- ENTER en sobre → muestra contenido de letter.txt escalado
+- Solo lectura, sin edicion
+- ESC vuelve al inbox
+- DEL borra carta
+
+**Integracion con otros sistemas:**
+- Bloqueo de controles en script.cpp cuando inbox abierto (como CustomBooks)
+- Input forwarding en Win32.cpp cuando inbox abierto
+- Render order en menu.cpp: Sheets > Letters > CustomBooks > Journal
+- No modifica logica existente de journal, custombooks, ni sheets
+
+**Configuracion INI:**
+```ini
+[Letters]
+Enabled=1                 ; 1=activado, 0=desactivado
+InteractKey=E             ; Tecla para abrir inbox cerca de postbox (A-Z)
+```
+
+**Strings de localizacion (config.h):**
+- `Letters_EnvelopeFrom=From:`
+- `Letters_EnvelopeTo=To:`
+- `Letters_EnvelopeHint=W: Write | D: Draw`
+- `Letters_SaveLetter=S: Save Letter`
+- `Letters_InboxTitle=Letter Inbox`
+- `Letters_NavHint=<- -> : Browse | ENTER: Open | TAB: Sent/Received | ESC: Close`
+- `Letters_ReadHint=R: Read again | DEL: Delete | ESC: Close`
+- `Letters_NearPostbox=Post Office nearby`
+- `Letters_PressInteract=Press E to open inbox`
+
+### 5. Iluminacion Dinamica
 
 - Tinte nocturno sobre el pergamino (21:00 - 06:00) segun `CLOCK::GET_CLOCK_HOURS()`
 - De noche: `IM_COL32(60, 55, 45, 160)` - calido y oscuro
@@ -274,6 +372,10 @@ Key=B                     ; Tecla para abrir satchel (A-Z)
 [RipSheets]
 enableRipSheetSystem=1    ; 1=activado, 0=desactivado (controla todo el sistema)
 ripSheetPickupKey=R       ; Tecla para recoger sheets del mundo (A-Z)
+
+[Letters]
+Enabled=1                 ; 1=activado, 0=desactivado
+InteractKey=E             ; Tecla para abrir inbox cerca de postbox (A-Z)
 
 [Localization]
 Help_Cover=...
