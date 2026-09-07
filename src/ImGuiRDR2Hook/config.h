@@ -53,8 +53,8 @@ namespace WJConfig
 	inline constexpr const char* FB_BookmarkRemoved    = "Bookmark Removed";
 	inline constexpr const char* FB_Sheet_RipHint      = "P: Rip Page";
 	inline constexpr const char* FB_Sheet_RippingProgress = "Ripping page...";
-	inline constexpr const char* FB_Sheet_LeaveHint    = "D: Leave here";
-	inline constexpr const char* FB_Sheet_SaveAsLetter  = "L: Save as Letter";
+	inline constexpr const char* FB_Sheet_LeaveHint    = "D: Drop Here";
+	inline constexpr const char* FB_Sheet_SaveAsLetter  = "L: Save as a letter";
 	inline constexpr const char* FB_Sheet_ReadHint     = "R: Read";
 	inline constexpr const char* FB_Sheet_RestoreHint  = "Add page back";
 	inline constexpr const char* FB_Sheet_CloseHint    = "Close";

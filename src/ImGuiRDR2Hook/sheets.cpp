@@ -100,6 +100,12 @@ namespace Sheets
 	static char s_envelopeNoteText[2048] = { 0 };
 	static bool s_envelopeFromFocused = false;
 	static bool s_envelopeToFocused = false;
+	
+	static bool s_envelopeDrawingActive = false;
+	static SheetDrawingLine s_envelopeCurrentLine;
+	static bool s_envelopeMouseWasDown = false;
+	static float s_envelopeEraserRadius = 15.f;
+	static bool s_envelopeEraserMode = false;
 
 	static fs::path GetDiscoverablesDir()
 	{
@@ -1026,9 +1032,19 @@ namespace Sheets
 			}
 			else if (s_letterFlowState == 3)
 			{
+				ImGuiIO& io = ImGui::GetIO();
+				
 				if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
 				{
-					StopLetterFlow();
+					if (s_envelopeDrawingActive)
+					{
+						s_envelopeDrawingActive = false;
+						s_envelopeDrawingMode = false;
+					}
+					else
+					{
+						StopLetterFlow();
+					}
 				}
 				else if (ImGui::IsKeyPressed(ImGuiKey_S, false))
 				{
@@ -1051,41 +1067,176 @@ namespace Sheets
 				}
 				else if (ImGui::IsKeyPressed(ImGuiKey_W, false))
 				{
-					s_envelopeWritingMode = !s_envelopeWritingMode;
+					s_envelopeWritingMode = true;
 					s_envelopeDrawingMode = false;
+					s_envelopeDrawingActive = false;
+					if (!s_envelopeToFocused && !s_envelopeFromFocused)
+					{
+						s_envelopeToFocused = true;
+						s_envelopeFromFocused = false;
+					}
 				}
 				else if (ImGui::IsKeyPressed(ImGuiKey_D, false))
 				{
 					s_envelopeDrawingMode = !s_envelopeDrawingMode;
 					s_envelopeWritingMode = false;
+					s_envelopeDrawingActive = s_envelopeDrawingMode;
+					s_envelopeToFocused = false;
+					s_envelopeFromFocused = false;
 				}
-				else if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+				else if (ImGui::IsKeyPressed(ImGuiKey_E, false) && s_envelopeDrawingMode)
 				{
-					ImGuiIO& io = ImGui::GetIO();
-					ImFont* df = ImGui::GetFont();
+					s_envelopeEraserMode = !s_envelopeEraserMode;
+				}
+				else if (ImGui::IsKeyPressed(ImGuiKey_Z, false) && s_envelopeDrawingMode && s_envelopeEraserMode)
+				{
+					s_envelopeEraserRadius = std::min(40.f, s_envelopeEraserRadius + 2.f);
+				}
+				else if (ImGui::IsKeyPressed(ImGuiKey_X, false) && s_envelopeDrawingMode && s_envelopeEraserMode)
+				{
+					s_envelopeEraserRadius = std::max(8.f, s_envelopeEraserRadius - 2.f);
+				}
+				
+				if (s_envelopeDrawingMode && s_envelopeDrawingActive)
+				{
 					float envW = io.DisplaySize.x * 0.5f;
 					float envH = io.DisplaySize.y * 0.3f;
 					ImVec2 envMn{ io.DisplaySize.x * 0.5f - envW * 0.5f, io.DisplaySize.y * 0.25f };
-					float textX = envMn.x + 20.f;
-					float textY = envMn.y + envH * 0.4f;
-					float fontSize = df->FontSize * 1.1f;
-					float inputX = textX + df->CalcTextSizeA(fontSize, FLT_MAX, 0.f, "From:  ").x;
-					float inputW = envW * 0.5f;
-
-					float fromY = textY;
-					float toY = textY + fontSize * 1.8f;
-
-					if (io.MousePos.x >= inputX && io.MousePos.x <= inputX + inputW)
+					ImVec2 envMx{ envMn.x + envW, envMn.y + envH };
+					
+					bool mouseDown = io.MouseDown[0];
+					bool mouseJustDown = mouseDown && !s_envelopeMouseWasDown;
+					s_envelopeMouseWasDown = mouseDown;
+					
+					if (mouseDown && io.MousePos.x >= envMn.x && io.MousePos.x <= envMx.x && 
+						io.MousePos.y >= envMn.y && io.MousePos.y <= envMx.y)
 					{
-						if (io.MousePos.y >= fromY && io.MousePos.y <= fromY + fontSize)
+						float nx = (io.MousePos.x - envMn.x) / envW;
+						float ny = (io.MousePos.y - envMn.y) / envH;
+						nx = std::max(0.f, std::min(1.f, nx));
+						ny = std::max(0.f, std::min(1.f, ny));
+						
+						if (s_envelopeEraserMode)
 						{
-							s_envelopeFromFocused = true;
-							s_envelopeToFocused = false;
+							float eraseRadiusNx = s_envelopeEraserRadius / envW;
+							float eraseRadiusNy = s_envelopeEraserRadius / envH;
+							
+							for (auto it = s_envelopeDrawing.lines.begin(); it != s_envelopeDrawing.lines.end();)
+							{
+								bool erased = false;
+								for (const auto& pt : it->points)
+								{
+									float dx = (pt.x - nx) * envW;
+									float dy = (pt.y - ny) * envH;
+									if (std::sqrt(dx * dx + dy * dy) < s_envelopeEraserRadius)
+									{
+										erased = true;
+										break;
+									}
+								}
+								if (erased)
+									it = s_envelopeDrawing.lines.erase(it);
+								else
+									++it;
+							}
 						}
-						else if (io.MousePos.y >= toY && io.MousePos.y <= toY + fontSize)
+						else
 						{
-							s_envelopeFromFocused = false;
-							s_envelopeToFocused = true;
+							if (mouseJustDown || s_envelopeCurrentLine.points.empty())
+							{
+								s_envelopeCurrentLine.points.clear();
+								s_envelopeCurrentLine.color = IM_COL32(48, 38, 30, 255);
+								s_envelopeCurrentLine.thickness = 2.0f;
+								s_envelopeCurrentLine.brush = 0;
+							}
+							s_envelopeCurrentLine.points.push_back({ nx, ny });
+						}
+					}
+					else if (!mouseDown && !s_envelopeCurrentLine.points.empty())
+					{
+						if (s_envelopeCurrentLine.points.size() > 1)
+						{
+							s_envelopeDrawing.lines.push_back(s_envelopeCurrentLine);
+						}
+						s_envelopeCurrentLine.points.clear();
+					}
+				}
+				else if (s_envelopeWritingMode)
+				{
+					if (s_envelopeToFocused || s_envelopeFromFocused)
+					{
+						for (int i = 0; i < io.InputQueueCharacters.Size; i++)
+						{
+							ImWchar c = io.InputQueueCharacters[i];
+							if (c == '\b')
+							{
+								if (s_envelopeToFocused && strlen(s_envelopeTo) > 0)
+								{
+									size_t len = strlen(s_envelopeTo);
+									s_envelopeTo[len - 1] = '\0';
+								}
+								else if (s_envelopeFromFocused && strlen(s_envelopeFrom) > 0)
+								{
+									size_t len = strlen(s_envelopeFrom);
+									s_envelopeFrom[len - 1] = '\0';
+								}
+							}
+							else if (c >= 32 && c < 127)
+							{
+								if (s_envelopeToFocused)
+								{
+									size_t len = strlen(s_envelopeTo);
+									if (len < sizeof(s_envelopeTo) - 1)
+									{
+										s_envelopeTo[len] = (char)c;
+										s_envelopeTo[len + 1] = '\0';
+									}
+								}
+								else if (s_envelopeFromFocused)
+								{
+									size_t len = strlen(s_envelopeFrom);
+									if (len < sizeof(s_envelopeFrom) - 1)
+									{
+										s_envelopeFrom[len] = (char)c;
+										s_envelopeFrom[len + 1] = '\0';
+									}
+								}
+							}
+						}
+					}
+					
+					if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+					{
+						ImFont* df = ImGui::GetFont();
+						float envW = io.DisplaySize.x * 0.5f;
+						float envH = io.DisplaySize.y * 0.3f;
+						ImVec2 envMn{ io.DisplaySize.x * 0.5f - envW * 0.5f, io.DisplaySize.y * 0.25f };
+						float textX = envMn.x + 20.f;
+						float textY = envMn.y + envH * 0.4f;
+						float fontSize = df->FontSize * 1.1f;
+						float inputX = textX + df->CalcTextSizeA(fontSize, FLT_MAX, 0.f, "From:  ").x;
+						float inputW = envW * 0.5f;
+
+						float fromY = textY;
+						float toY = textY + fontSize * 1.8f;
+
+						if (io.MousePos.x >= inputX && io.MousePos.x <= inputX + inputW)
+						{
+							if (io.MousePos.y >= fromY && io.MousePos.y <= fromY + fontSize)
+							{
+								s_envelopeFromFocused = true;
+								s_envelopeToFocused = false;
+							}
+							else if (io.MousePos.y >= toY && io.MousePos.y <= toY + fontSize)
+							{
+								s_envelopeFromFocused = false;
+								s_envelopeToFocused = true;
+							}
+							else
+							{
+								s_envelopeFromFocused = false;
+								s_envelopeToFocused = false;
+							}
 						}
 						else
 						{
@@ -1093,10 +1244,49 @@ namespace Sheets
 							s_envelopeToFocused = false;
 						}
 					}
-					else
+				}
+				else
+				{
+					if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
 					{
-						s_envelopeFromFocused = false;
-						s_envelopeToFocused = false;
+						ImFont* df = ImGui::GetFont();
+						float envW = io.DisplaySize.x * 0.5f;
+						float envH = io.DisplaySize.y * 0.3f;
+						ImVec2 envMn{ io.DisplaySize.x * 0.5f - envW * 0.5f, io.DisplaySize.y * 0.25f };
+						float textX = envMn.x + 20.f;
+						float textY = envMn.y + envH * 0.4f;
+						float fontSize = df->FontSize * 1.1f;
+						float inputX = textX + df->CalcTextSizeA(fontSize, FLT_MAX, 0.f, "From:  ").x;
+						float inputW = envW * 0.5f;
+
+						float fromY = textY;
+						float toY = textY + fontSize * 1.8f;
+
+						if (io.MousePos.x >= inputX && io.MousePos.x <= inputX + inputW)
+						{
+							if (io.MousePos.y >= fromY && io.MousePos.y <= fromY + fontSize)
+							{
+								s_envelopeFromFocused = true;
+								s_envelopeToFocused = false;
+								s_envelopeWritingMode = true;
+							}
+							else if (io.MousePos.y >= toY && io.MousePos.y <= toY + fontSize)
+							{
+								s_envelopeFromFocused = false;
+								s_envelopeToFocused = true;
+								s_envelopeWritingMode = true;
+							}
+							else
+							{
+								s_envelopeFromFocused = false;
+								s_envelopeToFocused = false;
+							}
+						}
+						else
+						{
+							s_envelopeFromFocused = false;
+							s_envelopeToFocused = false;
+						}
 					}
 				}
 			}
@@ -1735,6 +1925,34 @@ namespace Sheets
 		ImVec2 stampMx{ stampMn.x + stampSize, stampMn.y + stampSize };
 		dl->AddRectFilled(stampMn, stampMx, FadeCol(IM_COL32(180, 40, 30, 230), A), 2.f);
 
+		if (!s_envelopeDrawing.lines.empty() || (!s_envelopeCurrentLine.points.empty() && s_envelopeDrawingMode))
+		{
+			dl->PushClipRect(envMn, envMx, true);
+			
+			for (const auto& line : s_envelopeDrawing.lines)
+			{
+				if (line.points.size() < 2) continue;
+				for (size_t i = 1; i < line.points.size(); ++i)
+				{
+					ImVec2 p1 = { envMn.x + line.points[i - 1].x * envW, envMn.y + line.points[i - 1].y * envH };
+					ImVec2 p2 = { envMn.x + line.points[i].x * envW, envMn.y + line.points[i].y * envH };
+					dl->AddLine(p1, p2, FadeCol(line.color, A * 0.8f), line.thickness);
+				}
+			}
+			
+			if (!s_envelopeCurrentLine.points.empty() && s_envelopeDrawingMode)
+			{
+				for (size_t i = 1; i < s_envelopeCurrentLine.points.size(); ++i)
+				{
+					ImVec2 p1 = { envMn.x + s_envelopeCurrentLine.points[i - 1].x * envW, envMn.y + s_envelopeCurrentLine.points[i - 1].y * envH };
+					ImVec2 p2 = { envMn.x + s_envelopeCurrentLine.points[i].x * envW, envMn.y + s_envelopeCurrentLine.points[i].y * envH };
+					dl->AddLine(p1, p2, FadeCol(s_envelopeCurrentLine.color, A * 0.8f), s_envelopeCurrentLine.thickness);
+				}
+			}
+			
+			dl->PopClipRect();
+		}
+
 		float textX = envMn.x + 20.f;
 		float textY = envMn.y + envH * 0.4f;
 		float fontSize = df->FontSize * 1.1f;
@@ -1762,25 +1980,13 @@ namespace Sheets
 		}
 		dl->AddText(df, fontSize, { inputX, inputY2 }, FadeCol(IM_COL32(40, 30, 20, 255), A), s_envelopeTo);
 
-		if (!s_envelopeDrawing.lines.empty())
+		if (s_envelopeDrawingMode && s_envelopeEraserMode)
 		{
-			float drawAreaX = envMn.x + envW * 0.1f;
-			float drawAreaY = envMx.y + 20.f;
-			float drawAreaW = envW * 0.8f;
-			float drawAreaH = ds.y * 0.15f;
-
-			dl->AddRectFilled({ drawAreaX, drawAreaY }, { drawAreaX + drawAreaW, drawAreaY + drawAreaH }, FadeCol(IM_COL32(200, 190, 165, 100), A), 3.f);
-			dl->AddRect({ drawAreaX, drawAreaY }, { drawAreaX + drawAreaW, drawAreaY + drawAreaH }, FadeCol(IM_COL32(140, 120, 90, 150), A), 3.f, 0, 1.f);
-
-			for (const auto& line : s_envelopeDrawing.lines)
+			ImGuiIO& io = ImGui::GetIO();
+			if (io.MousePos.x >= envMn.x && io.MousePos.x <= envMx.x && 
+				io.MousePos.y >= envMn.y && io.MousePos.y <= envMx.y)
 			{
-				if (line.points.size() < 2) continue;
-				for (size_t i = 1; i < line.points.size(); ++i)
-				{
-					ImVec2 p1 = { drawAreaX + line.points[i - 1].x * drawAreaW, drawAreaY + line.points[i - 1].y * drawAreaH };
-					ImVec2 p2 = { drawAreaX + line.points[i].x * drawAreaW, drawAreaY + line.points[i].y * drawAreaH };
-					dl->AddLine(p1, p2, FadeCol(line.color, A * 0.8f), line.thickness);
-				}
+				dl->AddCircle(io.MousePos, s_envelopeEraserRadius, FadeCol(IM_COL32(255, 255, 255, 200), A), 12, 2.f);
 			}
 		}
 
@@ -1790,7 +1996,19 @@ namespace Sheets
 		const float helpY = ds.y - fh * 1.9f;
 		const float xm = std::max(ds.x * 0.018f, 10.f);
 
-		std::string helpStr = WJConfig::Letters_EnvelopeHint;
+		std::string helpStr;
+		if (s_envelopeDrawingMode)
+		{
+			helpStr = "D: Exit Draw | E: Eraser " + std::string(s_envelopeEraserMode ? "ON" : "OFF");
+			if (s_envelopeEraserMode)
+			{
+				helpStr += " | Z/X: Size";
+			}
+		}
+		else
+		{
+			helpStr = WJConfig::Letters_EnvelopeHint;
+		}
 		bool canSave = strlen(s_envelopeFrom) > 0 && strlen(s_envelopeTo) > 0;
 		if (canSave)
 		{
