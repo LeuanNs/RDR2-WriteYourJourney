@@ -1,5 +1,13 @@
 # Changelog - Write Your Journey
 
+## [Build - Fix Email Commit + Actualizacion Docs] - 2026-09-07
+
+### Fix: Email de commits corregido
+- Cambiado email de `leuan@users.noreply.github.com` a `evanmunozmorales@gmail.com`
+- Commits futuros apareceran con cuenta LeuanNs correctamente
+
+---
+
 ## [Build - Fix Hints y Funcionalidad W/D en Envelope] - 2026-09-07
 
 ### Fix: Textos de hints corregidos
