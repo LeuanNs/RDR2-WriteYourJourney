@@ -1,5 +1,67 @@
 # Changelog - Write Your Journey
 
+## [Build - Coordenadas Postboxes Letters] - 2026-09-12
+
+### Actualizacion: Coordenadas de postboxes del sistema Letters
+
+**Cambio:** Reemplazadas 5 coordenadas hardcodeadas de postboxes por 19 coordenadas reales obtenidas en-game.
+
+**Coordenadas nuevas (19 postboxes):**
+1. Benedict Point: -5227.43, -3470.58, -20.57
+2. BlackWater: -874.95, -1328.76, 43.96
+3. BlackWater 2: -875.15, -1325.16, 43.98
+4. Rhodes: 1231.43, -1299.67, 76.90
+5. Saint Denis: 2747.34, -1394.90, 46.18
+6. Saint Denis 2: 2749.54, -1399.68, 46.19
+7. Annesburg: 2939.45, 1288.62, 44.65
+8. Annesburg 2: 2931.54, 1282.91, 44.65
+9. Van Horn: 2985.99, 568.67, 44.59
+10. Van Horn 2: 2987.33, 576.23, 44.58
+11. Emerald Ranch: 1521.99, 439.49, 90.68
+12. Emerald Ranch 2: 1525.19, 442.66, 90.68
+13. Valentine: -174.51, 633.26, 114.09
+14. Valentine 2: -178.99, 626.75, 114.09
+15. Wallace Station: -1299.31, 401.96, 95.39
+16. Strawberry: -1767.40, -381.45, 157.73
+17. Strawberry 2: -1765.10, -384.14, 157.74
+18. Riggs Station: -1095.65, -576.68, 82.41
+19. Riggs Station 2: -1094.33, -574.92, 82.41
+
+**Archivos modificados:**
+- `src/ImGuiRDR2Hook/letters.cpp` - s_postboxLocations actualizado (5 -> 19 entradas), NUM_POSTBOXES = 19
+
+**Nota:** Radio de deteccion sigue siendo 3m (POSTBOX_RADIUS = 3.0f). Algunas localidades tienen 2 postboxes (BlackWater, Saint Denis, Annesburg, Van Horn, Emerald Ranch, Valentine, Strawberry, Riggs Station).
+
+### Checklist de Testing
+
+#### Postboxes Letters
+- [ ] Caminar a Valentine (-174.51, 633.26) -> aparecer prompt "Post Office nearby" a <3m
+- [ ] Caminar a BlackWater (-874.95, -1328.76) -> prompt aparece
+- [ ] Caminar a BlackWater 2 (-875.15, -1325.16) -> prompt aparece (segundo postbox)
+- [ ] Caminar a Rhodes (1231.43, -1299.67) -> prompt aparece
+- [ ] Caminar a Saint Denis (2747.34, -1394.90) -> prompt aparece
+- [ ] Caminar a Saint Denis 2 (2749.54, -1399.68) -> prompt aparece
+- [ ] Caminar a Annesburg (2939.45, 1288.62) -> prompt aparece
+- [ ] Caminar a Annesburg 2 (2931.54, 1282.91) -> prompt aparece
+- [ ] Caminar a Van Horn (2985.99, 568.67) -> prompt aparece
+- [ ] Caminar a Van Horn 2 (2987.33, 576.23) -> prompt aparece
+- [ ] Caminar a Emerald Ranch (1521.99, 439.49) -> prompt aparece
+- [ ] Caminar a Emerald Ranch 2 (1525.19, 442.66) -> prompt aparece
+- [ ] Caminar a Wallace Station (-1299.31, 401.96) -> prompt aparece
+- [ ] Caminar a Strawberry (-1767.40, -381.45) -> prompt aparece
+- [ ] Caminar a Strawberry 2 (-1765.10, -384.14) -> prompt aparece
+- [ ] Caminar a Riggs Station (-1095.65, -576.68) -> prompt aparece
+- [ ] Caminar a Riggs Station 2 (-1094.33, -574.92) -> prompt aparece
+- [ ] Caminar a Benedict Point (-5227.43, -3470.58) -> prompt aparece
+- [ ] Press E en postbox -> abre inbox correctamente
+- [ ] Inbox funciona: flechas navegan, ENTER abre carta, ESC cierra
+- [ ] Journal sigue funcionando normalmente
+- [ ] CustomBooks sigue funcionando normalmente
+- [ ] Sheets sigue funcionando normalmente
+- [ ] No hay conflictos de teclas
+
+---
+
 ## [Build - Fix Email Commit + Actualizacion Docs] - 2026-09-07
 
 ### Fix: Email de commits corregido
